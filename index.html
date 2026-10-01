@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Golden Trust Dealership</title>
+<title>ABRANTE3 GOLD DEALERSHIP</title>
 <style>
 :root{--ink:#17264a;--ink-soft:rgba(23,38,74,.1);--accent:#d1a03a;--accent-soft:rgba(209,160,58,.16);--accent-ink:#1a1405;
 --paper:#f3f4f7;--card:#fff;--line:#e2e6ec;--text:#1b2433;--muted:#667487;
@@ -325,7 +325,7 @@ function load(){
   if(d&&d.v===C.version){S=d;}else{reseed();}
 }
 function reseed(){
-  S={v:C.version,seq:1000,online:false,sms:{balance:C.smsBalance!=null?C.smsBalance:850},
+  S={v:C.version,seq:1000,online:false,sms:{balance:C.smsBalance!=null?C.smsBalance:0},
      settings:Object.assign({org:C.name,sender:C.sender,phone:C.phone||'',location:C.location||''},C.settings||{}),t:{}};
   S.t=C.seed(K);
   S.t.sms=S.t.sms||[];S.t.activity=S.t.activity||[];
@@ -880,134 +880,266 @@ K.start=cfg=>{
 <script>
 const {esc,money,T,add,upd,get,today,addDays,diffDays,fmtDate,fmtDay,badge,sum,pad,nowTime}=K;
 const r2=n=>Math.round(n*100)/100;
-const CARRY=10;
-// A gold weight is always {p:Pounds, b:Blades 0-9, m:Matches 0-9}. 10 Matches = 1 Blade, 10 Blades = 1 Pound —
-// the same kind of carry as feet/inches, just three tiers instead of two.
-const normW=w=>{
-  let p=w.p||0,b=w.b||0,m=w.m||0;
-  b+=Math.floor(m/CARRY);m=((m%CARRY)+CARRY)%CARRY;
-  p+=Math.floor(b/CARRY);b=((b%CARRY)+CARRY)%CARRY;
-  return{p,b,m};
+// Truncate (never round) to n decimals — the real Gold App chops digits at every step,
+// it doesn't round them. A tiny epsilon guards against float noise (e.g. 17.999999999996).
+const trunc=(x,n)=>{const f=Math.pow(10,n);return Math.floor(Number((x*f).toFixed(6)))/f;};
+
+// ---- The Royal Ama Yaba Ent. Gold Karat Chart, transcribed from the sheet on the wall ----
+// Index 0 = density 17.00, step 0.01, last entry = density 19.26.
+// (The very first reading, 17.00, was partly hidden under tape in the photo — flagged below.)
+const KCHART=[
+20.17,20.19,20.21,20.22,20.24,20.26,20.28,20.30,20.32,20.34,20.36,20.38,20.40,20.41,20.43,20.45,20.47,20.49,20.51,20.53,20.55,20.57,20.58,20.60,20.62,20.64,20.66,20.68,20.70,20.71,20.73,20.75,20.77,20.79,20.81,20.83,20.84,20.86,20.88,20.90,20.92,20.94,20.95,20.97,
+20.99,21.01,21.03,21.05,21.06,21.08,21.10,21.12,21.14,21.15,21.17,21.19,21.21,21.23,21.24,21.26,21.28,21.30,21.32,21.33,21.35,21.37,21.39,21.41,21.42,21.44,21.46,21.48,21.49,21.51,21.53,21.55,21.56,21.58,21.60,21.62,21.63,21.65,21.67,21.69,21.70,21.72,21.74,21.76,
+21.77,21.79,21.81,21.83,21.84,21.86,21.88,21.90,21.91,21.93,21.95,21.96,21.98,22.00,22.02,22.03,22.05,22.07,22.08,22.10,22.12,22.13,22.15,22.17,22.19,22.20,22.22,22.24,22.25,22.27,22.29,22.30,22.32,22.34,22.35,22.37,22.39,22.40,22.42,22.44,22.45,22.47,22.49,22.50,
+22.52,22.54,22.55,22.57,22.59,22.60,22.62,22.64,22.65,22.67,22.68,22.70,22.72,22.73,22.75,22.77,22.78,22.80,22.82,22.83,22.85,22.86,22.88,22.90,22.91,22.93,22.94,22.96,22.98,22.99,23.01,23.02,23.04,23.06,23.07,23.09,23.10,23.12,23.14,23.15,23.17,23.18,23.20,23.22,
+23.23,23.25,23.26,23.28,23.29,23.31,23.33,23.34,23.36,23.37,23.39,23.40,23.42,23.44,23.45,23.47,23.48,23.50,23.51,23.53,23.54,23.56,23.57,23.59,23.61,23.62,23.64,23.65,23.67,23.68,23.70,23.71,23.73,23.74,23.76,23.77,23.79,23.80,23.82,23.83,23.85,23.86,23.88,23.89,23.91,23.92,23.94,23.95,23.97,23.98,24.00
+];
+const KCHART_MIN=17.00,KCHART_MAX=19.26;
+// Looks up a computed karat-index against the chart. Below the sheet's range the gold is very
+// impure (clamp to the lowest listed karat and flag it — a human should double check by eye);
+// above it, treat as effectively pure (24k).
+const lookupKarat=idx=>{
+ idx=trunc(idx,2);
+ if(idx<KCHART_MIN)return{karat:KCHART[0],flag:'below chart — very low purity, please double-check'};
+ if(idx>KCHART_MAX)return{karat:24.00,flag:null};
+ const pos=Math.min(KCHART.length-1,Math.max(0,Math.round((idx-KCHART_MIN)*100)));
+ return{karat:KCHART[pos],flag:null};
 };
-const addW=(a,b)=>normW({p:a.p+b.p,b:a.b+b.b,m:a.m+b.m});
-const subW=(a,b)=>{
-  let p=a.p-b.p,bl=a.b-b.b,m=a.m-b.m;
-  if(m<0){m+=CARRY;bl--;}
-  if(bl<0){bl+=CARRY;p--;}
-  return{p:Math.max(0,p),b:Math.max(0,bl),m:Math.max(0,m)};
-};
-const unitsOf=w=>w.p*100+w.b*10+w.m;
-const poundEq=w=>r2(w.p+w.b/10+w.m/100);
-const fmtW=w=>w.p+' lb '+w.b+' bl '+w.m+' mt';
 const rates=()=>({pound:Number(K.setting('poundRate'))||0,blade:Number(K.setting('bladeRate'))||0,resale:Number(K.setting('resaleRate'))||0});
-// The seller is paid for Pounds and Blades only — Matches are the dealer's own retained weight, unpaid.
-const payFor=(w,rt)=>r2(w.p*rt.pound+w.b*rt.blade);
-// Not paid to anyone — a rough internal estimate of what the retained Matches are worth, for management reporting only.
-const matchesValue=(w,rt)=>r2(w.m*(rt.blade/CARRY));
+
+// ---- Pricing: two completely different paths depending on what walks in the door ----
+// REFINED: weighed in grams, divided by 7.75 gives the pound-weight. A second reading — density,
+// found by weighing the same gold underwater — gives a "karat index" (grams ÷ density) which is
+// looked up on the chart for the true karat. Only 23k and above gets the full market pound rate;
+// anything under 23 gets a proportional haircut (karat ÷ 23) before the pound rate is applied.
+function refinedCalc(grams,density,rt){
+ grams=Number(grams)||0;density=Number(density)||0;
+ if(grams<=0||density<=0)return null;
+ const pounds=trunc(grams/7.75,2);
+ const karatIndex=trunc(grams/density,2);
+ const look=lookupKarat(karatIndex);
+ const karat=look.karat;
+ const factor=karat>=23?1:trunc(karat/23,2);
+ const adjRate=r2(rt.pound*factor);
+ const amount=r2(pounds*adjRate);
+ return{kind:'refined',grams,density,pounds,karatIndex,karat,factor,adjRate,amount,poundEq:pounds,flag:look.flag};
+}
+// BOX (raw/crude): no refining, no karat test — just weighed, divided by 0.8 (equivalently
+// ×10÷8), truncated to one decimal, and paid straight off the blade rate. The conservatism of a
+// flat blade-only rate — no purity credit at all — is where the margin on raw gold comes from.
+function boxCalc(grams,rt){
+ grams=Number(grams)||0;
+ if(grams<=0)return null;
+ const bladeEq=trunc(grams/0.8,1);
+ const amount=r2(bladeEq*rt.blade);
+ return{kind:'box',grams,bladeEq,amount,poundEq:r2(bladeEq/10)};
+}
+const fmtLb=n=>trunc(n,2).toFixed(2)+' lb-eq';
 const sellerOf=id=>get('sellers',id)||{name:'Walk-in seller',phone:''};
 const sellerOpts=()=>T('sellers').map(s=>({v:s.id,l:s.name+(s.phone?' ('+s.phone+')':'')}));
-const stockTotal=()=>{
-  const bought=T('purchases').reduce((a,x)=>addW(a,{p:x.p,b:x.b,m:x.m}),{p:0,b:0,m:0});
-  const sold=T('dispatches').reduce((a,x)=>addW(a,{p:x.p,b:x.b,m:x.m}),{p:0,b:0,m:0});
-  return subW(bought,sold);
-};
-// Profit/gain in green, loss and expense/outflow figures in red — pass 'raw' to K.strip to
-// slot the colored HTML straight in (it otherwise escapes plain text).
+const stockPoundEq=()=>r2(sum(T('purchases'),x=>x.poundEq)-sum(T('dispatches'),x=>x.poundEq));
+// Dispatches are tagged with which pile they came from, so stock can be split by type exactly —
+// not just estimated by a proportional guess.
+const stockByKind=()=>({
+ refined:r2(sum(T('purchases').filter(x=>x.kind==='refined'),x=>x.poundEq)-sum(T('dispatches').filter(x=>x.kind==='refined'),x=>x.poundEq)),
+ box:r2(sum(T('purchases').filter(x=>x.kind==='box'),x=>x.poundEq)-sum(T('dispatches').filter(x=>x.kind==='box'),x=>x.poundEq))
+});
 const pl=n=>'<span style="color:'+(n<0?'var(--bad)':'var(--ok)')+';font-weight:700">'+money(n)+'</span>';
 const out=n=>'<span style="color:var(--bad);font-weight:700">'+money(n)+'</span>';
 const row2=(label,val,bold)=>'<div style="display:flex;justify-content:space-between;gap:10px;margin:4px 0'+(bold?';font-weight:800;font-size:16px':'')+'"><span>'+label+'</span><span>'+val+'</span></div>';
-// The seller's receipt accounts only for Pounds and Blades (what he is actually paid for) —
-// the Matches never appear here. The fuller internal record lives in the Ledger instead.
-const purchaseReceipt=row=>({title:'Gold purchase receipt',
-  meta:[['Receipt No.',row.ref],['Date',fmtDate(row.date)+' '+row.time],['Seller',sellerOf(row.sellerId).name],['Weighed by',row.weigher||'—']],
+
+// The float — cash sent down (mostly on Tuesdays) to buy gold with — minus what's actually been
+// paid to sellers and expenses, plus whatever dispatches have brought back in. This is the number
+// that answers "how much can I still buy today?"
+const floatIn=(d)=>sum(T('cashfloat').filter(x=>!d||x.date===d),x=>x.amount)+sum(T('dispatches').filter(x=>!d||x.date===d),x=>x.revenue);
+const floatOut=(d)=>sum(T('purchases').filter(x=>!d||x.date===d),x=>x.amount)+sum(T('expenses').filter(x=>!d||x.date===d),x=>x.amount);
+const floatBalance=()=>r2(floatIn()-floatOut());
+function allDates(){
+ const s=new Set();
+ ['cashfloat','purchases','dispatches','expenses'].forEach(t=>T(t).forEach(x=>s.add(x.date)));
+ return Array.from(s).sort();
+}
+function dailyBalances(){
+ const days=allDates();let opening=0;const rows=[];
+ days.forEach(d=>{
+  const inn=r2(floatIn(d)),outt=r2(floatOut(d)),closing=r2(opening+inn-outt);
+  rows.push({date:d,opening:r2(opening),in:inn,out:outt,closing});
+  opening=closing;
+ });
+ return rows;
+}
+
+const purchaseReceipt=row=>{
+ const s=sellerOf(row.sellerId);
+ if(row.kind==='refined')return{title:'Gold purchase receipt — Refined',
+  meta:[['Receipt No.',row.ref],['Date',fmtDate(row.date)+' '+row.time],['Seller',s.name],['Weighed by',row.weigher||'—']],
   items:[],
-  totals:[['Weight — Pounds',row.p+' lb'],['Weight — Blades',row.b+' bl'],['Amount paid',money(row.amount),1]],
-  foot:'Thank you for your business'});
+  totals:[['Weight',row.grams+' g'],['Density',row.density],['Karat (chart)',row.karat.toFixed(2)],['Weight — Pounds',row.pounds.toFixed(2)+' lb'],['Amount paid',money(row.amount),1]],
+  foot:'Thank you for your business'};
+ return{title:'Gold purchase receipt — Box (raw)',
+  meta:[['Receipt No.',row.ref],['Date',fmtDate(row.date)+' '+row.time],['Seller',s.name],['Weighed by',row.weigher||'—']],
+  items:[],
+  totals:[['Weight',row.grams+' g'],['Blade-equivalent',row.bladeEq.toFixed(1)],['Amount paid',money(row.amount),1]],
+  foot:'Thank you for your business'};
+};
+
+const KCHART_MODAL=()=>{
+ const rowsHtml=KCHART.map((k,i)=>{const d=r2(KCHART_MIN+i*0.01);return '<tr><td>'+d.toFixed(2)+'</td><td>'+k.toFixed(2)+'</td></tr>';}).join('');
+ K.modal({title:'Gold Karat Chart — Royal Ama Yaba Ent.',wide:true,
+  body:'<p class="muted small" style="margin-bottom:8px">Density (from the water test) on the left, the karat it corresponds to on the right.</p>'+
+   '<div style="max-height:60vh;overflow:auto"><table style="width:100%;border-collapse:collapse"><thead style="position:sticky;top:0;background:#fff"><tr><th style="text-align:left;padding:4px 8px;border-bottom:1px solid var(--line)">Density</th><th style="text-align:left;padding:4px 8px;border-bottom:1px solid var(--line)">Karat</th></tr></thead><tbody>'+rowsHtml+'</tbody></table></div>',
+  buttons:[{l:'Close'}]});
+};
+
+// ---- World gold market — a live-looking simulation, not a real feed ----
+// This app is built to run fully offline (that's the whole point — no internet needed for
+// daily work), so it has no way to reach a real gold/forex price feed from inside the page.
+// What this gives instead: a realistic-looking live ticker, random-walking around an anchor
+// price the dealer can correct to today's actual print, purely so the chart on screen behaves
+// the way a real market chart would while you're demonstrating it. It is clearly labelled as
+// such in the UI — never presented as a genuine live price.
+const OZ_TO_GRAMS=31.1035;
+let marketHist=null,marketTimer=null;
+const stopMarketTicker=()=>{if(marketTimer){clearInterval(marketTimer);marketTimer=null;}};
+const seedMarketHist=()=>{
+ const s=K.S.settings;let usdOz=Number(s.worldGoldUsdOz)||2650,ghs=Number(s.usdGhsRate)||15.3;
+ marketHist=[];
+ for(let i=20;i>=0;i--){usdOz=r2(usdOz*(1+(Math.random()-0.5)*0.0016));ghs=r2(Math.max(1,ghs*(1+(Math.random()-0.5)*0.0008)));marketHist.push({usdOz,ghs});}
+};
+const marketTick=()=>{
+ if(!marketHist)seedMarketHist();
+ const last=marketHist[marketHist.length-1];
+ const usdOz=Math.max(500,r2(last.usdOz*(1+(Math.random()-0.5)*0.0016)));
+ const ghs=Math.max(1,r2(last.ghs*(1+(Math.random()-0.5)*0.0008)));
+ marketHist.push({usdOz,ghs});
+ if(marketHist.length>36)marketHist.shift();
+ return marketHist[marketHist.length-1];
+};
+const marketDerived=pt=>{
+ const usdPerGram=r2(pt.usdOz/OZ_TO_GRAMS);
+ const ghsPerGram=r2(usdPerGram*pt.ghs);
+ const ghsPerPound=r2(ghsPerGram*7.75); // 1 local "pound" unit = 7.75g, same constant the pricing engine uses
+ return{usdPerGram,ghsPerGram,ghsPerPound};
+};
 
 const APP_CONFIG={
- id:'gold',version:1,name:'Golden Trust Dealership',product:'Gold Trading Manager',sender:'GOLDTRUST',phone:'0244 000 900',
- ink:'#2b2110',accent:'#c9a227',accentInk:'#241a00',smsBalance:180,
+ id:'gold',version:3,name:'Sample Gold Dealership',product:'Gold Trading Manager',sender:'GOLDTRUST',phone:'0244 000 900',
+ ink:'#2b2110',accent:'#c9a227',accentInk:'#241a00',smsBalance:0,
  vendorName:'NYANSATEK',vendorPhone:'0536340578',
- tagline:'Weigh in gold by Pounds, Blades and Matches, pay sellers fairly on the spot, and keep the full record for yourself — all on this computer.',
+ tagline:'Weigh in Refined or Box gold, price it exactly the way the Gold App does — karat chart and all — pay the seller on the spot, and track the day’s cash float, all on this computer.',
  users:[{name:'Kwabena Owusu',role:'Owner'},{name:'Yaw Mensah',role:'Weigher'}],
  roleHome:{Weigher:'purchase'},
  nav:[
   {id:'purchase',label:'Buy Gold',icon:'cart'},
+  {id:'cash',label:'Cash & Balances',icon:'cash',roles:['Owner']},
   {id:'stock',label:'Gold Stock',icon:'box',roles:['Owner']},
   {id:'sellers',label:'Sellers',icon:'users',roles:['Owner']},
   {id:'staff',label:'Staff',icon:'list',roles:['Owner']},
   {id:'ledger',label:'Ledger',icon:'chart',roles:['Owner']}
  ],
- settings:{poundRate:11427,bladeRate:1040,resaleRate:11800},
+ settings:{poundRate:11427,bladeRate:1040,resaleRate:11800,worldGoldUsdOz:2650,usdGhsRate:15.30},
 
  seed(K){
-  const r=K.rng(77),t=today();
-  const SN=['Kwame Asante','Abena Owusu','Yaw Boakye','Akosua Frimpong','Kojo Appiah','Adjoa Mensah','Kwesi Ansah','Efua Danso','Fiifi Arthur','Maame Yeboah'];
+  const r=K.rng(91),t=today();
+  const SN=['Kofi Mensah','Abena Owusu','Yaw Boakye','Akosua Frimpong','Kojo Appiah','Adjoa Mensah','Kwesi Ansah','Efua Danso','Fiifi Arthur','Maame Yeboah'];
   const sellers=SN.map((n,i)=>({id:'sl'+(i+1),name:n,phone:'024'+pad(2000000+i*137,7)}));
-  const rt0={pound:11427,blade:1040};
+  const rt0={pound:11427,blade:1040,resale:11800};
   const purchases=[];let pn=1;
-  for(let d=9;d>=0;d--){
-   const cnt=d===0?2:1+Math.floor(r()*3);
+  const addPurchase=(offset,sellerId,weigher,calc)=>{
+   purchases.push(Object.assign({id:'gp'+pn,ref:'GP-'+pad(pn,4),date:addDays(t,-offset),time:pad(8+Math.floor(r()*9))+':'+pad(Math.floor(r()*60)),sellerId,weigher},calc));
+   pn++;
+  };
+  // The two exact scenarios from the client visit, seeded verbatim so the numbers are familiar.
+  addPurchase(9,'sl1','Emmanuel Quarcoo',refinedCalc(8.63,0.47,rt0));
+  addPurchase(6,'sl1','Derrick Aboagye',boxCalc(8.7,rt0));
+  for(let d=8;d>=0;d--){
+   const cnt=d===0?1:1+Math.floor(r()*2);
    for(let k=0;k<cnt;k++){
     const s=sellers[Math.floor(r()*sellers.length)];
-    let w=normW({p:Math.floor(r()*2),b:Math.floor(r()*10),m:Math.floor(r()*10)});
-    if(w.p===0&&w.b===0&&w.m===0)w=normW({p:0,b:1+Math.floor(r()*8),m:Math.floor(r()*10)});
-    const amount=payFor(w,rt0);
-    purchases.push({id:'gp'+pn,ref:'GP-'+pad(pn,4),date:addDays(t,-d),time:pad(8+Math.floor(r()*9))+':'+pad(Math.floor(r()*60)),sellerId:s.id,p:w.p,b:w.b,m:w.m,poundRate:rt0.pound,bladeRate:rt0.blade,amount,weigher:k%2?'Yaw Mensah':'Kwabena Owusu'});
-    pn++;
+    const weigher=k%2?'Derrick Aboagye':'Emmanuel Quarcoo';
+    if(r()<0.6){
+     const grams=r2(6+r()*10);
+     const density=r2(grams/(17.2+r()*2.0)); // mostly lands inside the chart's range
+     addPurchase(d,s.id,weigher,refinedCalc(grams,density,rt0));
+    }else{
+     const grams=r2(5+r()*9);
+     addPurchase(d,s.id,weigher,boxCalc(grams,rt0));
+    }
    }
   }
-  const D1={p:2,b:4,m:0},D2={p:1,b:8,m:0};
-  const dispatches=[
-   {id:'gd1',ref:'GD-0001',date:addDays(t,-6),time:'15:40',to:'Precious Metals Refinery — Accra',p:D1.p,b:D1.b,m:D1.m,rate:11800,revenue:r2(poundEq(D1)*11800)},
-   {id:'gd2',ref:'GD-0002',date:addDays(t,-2),time:'12:10',to:'Precious Metals Refinery — Accra',p:D2.p,b:D2.b,m:D2.m,rate:11800,revenue:r2(poundEq(D2)*11800)}
-  ];
+  const refinedBought=sum(purchases.filter(x=>x.kind==='refined'),x=>x.poundEq);
+  const boxBought=sum(purchases.filter(x=>x.kind==='box'),x=>x.poundEq);
+  const D=[{off:6,kind:'refined',poundEq:r2(Math.min(3.4,refinedBought*0.3))},{off:2,kind:'box',poundEq:r2(Math.min(2.1,boxBought*0.3))}];
+  const dispatches=D.map((x,i)=>({id:'gd'+(i+1),ref:'GD-'+pad(i+1,4),date:addDays(t,-x.off),time:'15:'+pad(10+i*20),to:'Precious Metals Refinery — Accra',kind:x.kind,poundEq:x.poundEq,rate:rt0.resale,revenue:r2(x.poundEq*rt0.resale)}));
   const staff=[
-   {id:'st1',name:'Kwabena Owusu',phone:'0201234567',role:'Owner',status:'active'},
-   {id:'st2',name:'Yaw Mensah',phone:'0241234567',role:'Weigher',status:'active'}
+   {id:'st1',name:'Emmanuel Quarcoo',phone:'0201234567',role:'Owner',status:'active'},
+   {id:'st2',name:'Derrick Aboagye',phone:'0241234567',role:'Weigher',status:'active'}
   ];
   const expenses=[
    {id:'e1',date:addDays(t,-5),category:'Security',amount:300,note:'Vault security — weekly'},
    {id:'e2',date:addDays(t,-3),category:'Assay fees',amount:150,note:'Purity testing'}
   ];
-  return{sellers,purchases,dispatches,staff,expenses};
+  // Size each tranche to comfortably cover everything spent in its own week (with a margin),
+  // using the actual dated spend/revenue rather than a flat split — a seeded demo shouldn't
+  // show cash going negative on some day just because the split happened to be too even.
+  const cf2Date=addDays(t,-2);
+  const outBefore=sum(purchases.filter(x=>x.date<cf2Date),x=>x.amount)+sum(expenses.filter(x=>x.date<cf2Date),x=>x.amount);
+  const revBefore=sum(dispatches.filter(x=>x.date<cf2Date),x=>x.revenue);
+  const outFrom=sum(purchases.filter(x=>x.date>=cf2Date),x=>x.amount)+sum(expenses.filter(x=>x.date>=cf2Date),x=>x.amount);
+  const revFrom=sum(dispatches.filter(x=>x.date>=cf2Date),x=>x.revenue);
+  const cashfloat=[
+   {id:'cf1',date:addDays(t,-9),amount:r2(Math.max(0,outBefore-revBefore)*1.2),note:'Weekly float — Tuesday release'},
+   {id:'cf2',date:cf2Date,amount:r2(Math.max(0,outFrom-revFrom)*1.2),note:'Weekly float — Tuesday release'}
+  ];
+  const rateHistory=[{id:'rh1',date:addDays(t,-9),poundRate:rt0.pound,bladeRate:rt0.blade,resaleRate:rt0.resale}];
+  return{sellers,purchases,dispatches,staff,expenses,cashfloat,rateHistory};
  },
 
  views:{
   purchase(el){
+   stopMarketTicker();
+   const st={kind:'refined'};
+   const readGrams=()=>Number(el.querySelector('#pf_grams').value)||0;
+   const readDensity=()=>Number(el.querySelector('#pf_density').value)||0;
+   const calcNow=()=>st.kind==='refined'?refinedCalc(readGrams(),readDensity(),rates()):boxCalc(readGrams(),rates());
    const paintPreview=()=>{
-    const rt=rates();const nw=normW(readInputs());const pay=payFor(nw,rt);const mv=matchesValue(nw,rt);
-    el.querySelector('#pf_preview').innerHTML=
-     row2('Full weight received','<b>'+esc(fmtW(nw))+'</b>')+
-     row2('Payable to seller','<b>'+esc(nw.p+' lb '+nw.b+' bl')+'</b>')+
-     '<hr style="border:0;border-top:1px dashed var(--line);margin:8px 0">'+
-     row2('Amount to pay seller',money(pay),1)+
-     row2('Matches retained (yours — not paid)',nw.m+' mt'+(mv?' · est. '+money(mv):''));
+    const c=calcNow();const box=el.querySelector('#pf_preview');
+    if(!c){box.innerHTML=K.empty('Enter a weight above zero to see the price');return;}
+    if(c.kind==='refined'){
+     box.innerHTML=row2('Weight in pounds','<b>'+c.pounds.toFixed(2)+' lb</b>')+
+      row2('Karat index (grams ÷ density)',c.karatIndex.toFixed(2))+
+      row2('Karat (from chart)','<b>'+c.karat.toFixed(2)+'</b>'+(c.flag?' <span style="color:var(--bad)">— '+esc(c.flag)+'</span>':''))+
+      (c.factor<1?row2('Below 23k — rate factor',c.factor.toFixed(2)+' ('+c.karat.toFixed(2)+' ÷ 23)'):row2('23k or above','full market rate applies'))+
+      row2('Adjusted pound rate',money(c.adjRate))+
+      '<hr style="border:0;border-top:1px dashed var(--line);margin:8px 0">'+
+      row2('Amount to pay seller',money(c.amount),1);
+    }else{
+     box.innerHTML=row2('Blade-equivalent (grams ÷ 0.8)','<b>'+c.bladeEq.toFixed(1)+'</b>')+
+      row2('Priced at blade rate','<b>'+money(rates().blade)+'</b> — no karat test for raw/box gold')+
+      '<hr style="border:0;border-top:1px dashed var(--line);margin:8px 0">'+
+      row2('Amount to pay seller',money(c.amount),1);
+    }
    };
    const paintLists=()=>{
     const rows=T('purchases').slice().sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time));
     const todayRows=rows.filter(x=>x.date===today());
-    el.querySelector('#plist').innerHTML=K.list(todayRows.slice(0,8).map(x=>({t:sellerOf(x.sellerId).name,s:fmtW({p:x.p,b:x.b,m:x.m})+' · '+x.time,r:money(x.amount)})),'No purchases recorded yet today.');
-    el.querySelector('#pstocksum').innerHTML=row2('Total gold held','<b>'+esc(fmtW(stockTotal()))+'</b>',1);
+    el.querySelector('#plist').innerHTML=K.list(todayRows.slice(0,8).map(x=>({t:sellerOf(x.sellerId).name+' — '+(x.kind==='refined'?'Refined':'Box'),s:(x.kind==='refined'?x.grams+'g @ '+x.karat.toFixed(2)+'k':x.grams+'g box')+' · '+x.time,r:money(x.amount)})),'No purchases recorded yet today.');
+    el.querySelector('#pstocksum').innerHTML=row2('Total gold held','<b>'+fmtLb(stockPoundEq())+'</b>',1)+row2('Cash float remaining today',money(floatBalance()));
     el.querySelector('#ptab').innerHTML=K.table([
-     {l:'Ref',k:'ref'},{l:'Seller',f:x=>sellerOf(x.sellerId).name},{l:'Weight',f:x=>fmtW({p:x.p,b:x.b,m:x.m})},{l:'Paid',cls:'num',f:x=>money(x.amount)},
+     {l:'Ref',k:'ref'},{l:'Seller',f:x=>sellerOf(x.sellerId).name},{l:'Type',f:x=>badge(x.kind==='refined'?'Refined':'Box',x.kind==='refined'?'info':'mute')},
+     {l:'Weight',f:x=>x.grams+' g'},{l:'Paid',cls:'num',f:x=>money(x.amount)},
      {l:'',cls:'acts',f:x=>'<button type="button" class="btn sm" data-act="reprint" data-id="'+x.id+'">Reprint</button>'}
     ],rows.slice(0,10),{empty:'No purchases yet'});
    };
-   const readInputs=()=>({
-    p:Math.max(0,Math.floor(Number(el.querySelector('#pf_p').value)||0)),
-    b:Math.max(0,Math.floor(Number(el.querySelector('#pf_b').value)||0)),
-    m:Math.max(0,Math.floor(Number(el.querySelector('#pf_m').value)||0))
-   });
    const draw=()=>{
     el.innerHTML='<div class="grid2"><div class="stack">'+
-     '<div class="card"><h3>Weigh in gold from a seller</h3>'+
-      '<label class="fld full" style="margin-bottom:10px"><span>Seller</span><select id="pf_seller"><option value="">Walk-in seller</option>'+
+     '<div class="card"><div class="bar" style="margin-bottom:4px"><h3 style="margin:0">Weigh in gold from a seller</h3><span class="sp"></span><button type="button" class="btn sm" data-act="chart">View karat chart</button></div>'+
+      K.chips(['Refined','Box (raw/crude)'],st.kind==='refined'?0:1,'kind')+
+      '<label class="fld full" style="margin:10px 0"><span>Seller</span><select id="pf_seller"><option value="">Walk-in seller</option>'+
        sellerOpts().map(o=>'<option value="'+esc(o.v)+'">'+esc(o.l)+'</option>').join('')+'</select></label>'+
-      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">'+
-       '<label class="fld"><span>Pounds</span><input id="pf_p" type="number" min="0" value="0" data-inp="wp"></label>'+
-       '<label class="fld"><span>Blades</span><input id="pf_b" type="number" min="0" value="0" data-inp="wb"></label>'+
-       '<label class="fld"><span>Matches</span><input id="pf_m" type="number" min="0" value="0" data-inp="wm"></label>'+
+      '<div style="display:grid;grid-template-columns:repeat('+(st.kind==='refined'?2:1)+',1fr);gap:12px">'+
+       '<label class="fld"><span>Weight (grams)</span><input id="pf_grams" type="number" min="0" step="0.01" value="" data-inp="wg" placeholder="e.g. 8.63"></label>'+
+       (st.kind==='refined'?'<label class="fld"><span>Density (water test)</span><input id="pf_density" type="number" min="0" step="0.01" value="" data-inp="wd" placeholder="e.g. 0.47"></label>':'')+
       '</div>'+
       '<div class="card" id="pf_preview" style="background:var(--paper);margin:14px 0"></div>'+
       '<button class="btn acc lg" style="width:100%" data-act="record">Record purchase &amp; pay seller</button>'+
@@ -1020,91 +1152,161 @@ const APP_CONFIG={
     paintPreview();paintLists();
    };
    function record(){
-    const rt=rates();const nw=normW(readInputs());
-    if(nw.p===0&&nw.b===0&&nw.m===0){K.toast('Enter a weight greater than zero','bad');return;}
-    const pay=payFor(nw,rt);
+    const c=calcNow();
+    if(!c){K.toast(st.kind==='refined'?'Enter both weight and density':'Enter a weight greater than zero','bad');return;}
     const sellerId=el.querySelector('#pf_seller').value;
     const n=T('purchases').length+1;
-    const rowRec=add('purchases',{ref:'GP-'+pad(n,4),date:today(),time:nowTime(),sellerId:sellerId||'',p:nw.p,b:nw.b,m:nw.m,poundRate:rt.pound,bladeRate:rt.blade,amount:pay,weigher:K.user().name});
+    const rowRec=add('purchases',Object.assign({ref:'GP-'+pad(n,4),date:today(),time:nowTime(),sellerId:sellerId||'',weigher:K.user().name},c));
     K.save();
-    K.log('Bought gold '+fmtW(nw)+' from '+sellerOf(sellerId).name+' — paid '+money(pay));
-    el.querySelector('#pf_p').value='0';el.querySelector('#pf_b').value='0';el.querySelector('#pf_m').value='0';
+    K.log('Bought '+(c.kind==='refined'?'refined':'box')+' gold ('+c.grams+'g) from '+sellerOf(sellerId).name+' — paid '+money(c.amount));
+    el.querySelector('#pf_grams').value='';const dEl=el.querySelector('#pf_density');if(dEl)dEl.value='';
     paintPreview();paintLists();
     K.showReceipt(purchaseReceipt(rowRec));
    }
-   K.bind(el,{wp:paintPreview,wb:paintPreview,wm:paintPreview,record:()=>record(),
+   K.bind(el,{wg:paintPreview,wd:paintPreview,
+    kind:i=>{st.kind=+i===0?'refined':'box';draw();},
+    record:()=>record(),chart:()=>KCHART_MODAL(),
     reprint:id=>{const rowRec=get('purchases',id);if(rowRec)K.printReceipt(purchaseReceipt(rowRec));}});
    draw();
   },
 
-  stock(el){
-   const kpi=(l,v)=>'<div class="kpi"><span class="kl">'+esc(l)+'</span><b class="kv">'+v+'</b></div>';
-   const readD=()=>({
-    p:Math.max(0,Math.floor(Number(el.querySelector('#df_p').value)||0)),
-    b:Math.max(0,Math.floor(Number(el.querySelector('#df_b').value)||0)),
-    m:Math.max(0,Math.floor(Number(el.querySelector('#df_m').value)||0))
+  cash(el){
+   stopMarketTicker();
+   const draw=()=>{
+    const days=dailyBalances().slice().reverse();
+    const todayRow=days.find(d=>d.date===today())||{opening:days[0]?days[0].closing:0,in:0,out:0,closing:floatBalance()};
+    el.innerHTML='<div class="grid2"><div class="stack">'+
+     '<div class="card"><h3>Today</h3>'+K.strip([
+       ['Opening balance',money(todayRow.opening!=null?todayRow.opening:0)],
+       ['Cash received today',money(floatIn(today()))],
+       ['Paid out today',out(floatOut(today())),'raw'],
+       ['Closing balance (running)',money(floatBalance()),'raw']
+      ])+
+      '<div class="bar" style="margin-top:12px"><span class="sp"></span><button class="btn pri" data-act="newcash">Record cash received</button></div></div>'+
+     '<div class="card"><h3>Daily opening &amp; closing balance</h3>'+K.table([
+       {l:'Date',f:d=>fmtDate(d.date)},{l:'Opening',cls:'num',f:d=>money(d.opening)},{l:'Received',cls:'num',f:d=>money(d.in)},{l:'Paid out',cls:'num',f:d=>money(d.out)},{l:'Closing',cls:'num',f:d=>money(d.closing)}
+      ],days,{empty:'No cash activity yet'})+'</div>'+
+     '</div><div class="stack">'+
+     '<div class="card"><h3>Cash float received</h3><p class="muted small" style="margin-bottom:10px">Cash sent down from head office to buy gold with — usually on Tuesdays.</p>'+K.table([
+       {l:'Date',f:x=>fmtDate(x.date)},{l:'Amount',cls:'num',f:x=>money(x.amount)},{l:'Note',k:'note'}
+      ],T('cashfloat').slice().sort((a,b)=>b.date.localeCompare(a.date)),{empty:'No cash float recorded yet'})+'</div>'+
+     '</div></div>';
+   };
+   K.bind(el,{
+    newcash:()=>K.formModal({title:'Record cash received',fields:[
+      {k:'date',l:'Date',t:'date',req:1,def:today()},
+      {k:'amount',l:'Amount (GH₵)',t:'number',step:'0.01',req:1},
+      {k:'note',l:'Note',w:'full',def:'Weekly float'}
+     ],onSave:v=>{add('cashfloat',{date:v.date,amount:Number(v.amount),note:v.note});K.log('Cash float received: '+money(v.amount));K.toast('Recorded','ok');draw();}})
    });
+   draw();
+  },
+
+  stock(el){
+   stopMarketTicker();
+   const readD=()=>Number(el.querySelector('#df_poundeq').value)||0;
+   const readKind=()=>el.querySelector('#df_kind').value||'refined';
    const paintDispatchPreview=()=>{
-    const rt=rates();const nw=normW(readD());const rev=r2(poundEq(nw)*rt.resale);
-    el.querySelector('#df_preview').innerHTML=row2('Weight to dispatch','<b>'+esc(fmtW(nw))+'</b>')+row2('Expected revenue',money(rev),1);
+    const rt=rates();const w=readD();const rev=r2(w*rt.resale);const avail=stockByKind()[readKind()];
+    el.querySelector('#df_preview').innerHTML=row2('Available in that pile',fmtLb(avail))+row2('Expected revenue',money(rev),1);
    };
    const paintDispatches=()=>{
     el.querySelector('#dtab').innerHTML=K.table([
-     {l:'Ref',k:'ref'},{l:'Date',f:x=>fmtDate(x.date)},{l:'To',k:'to'},{l:'Weight',f:x=>fmtW({p:x.p,b:x.b,m:x.m})},{l:'Revenue',cls:'num',f:x=>money(x.revenue)}
+     {l:'Ref',k:'ref'},{l:'Date',f:x=>fmtDate(x.date)},{l:'To',k:'to'},{l:'From',f:x=>badge(x.kind==='refined'?'Refined':'Box',x.kind==='refined'?'info':'mute')},{l:'Weight',f:x=>fmtLb(x.poundEq)},{l:'Revenue',cls:'num',f:x=>money(x.revenue)}
     ],T('dispatches').slice().reverse(),{empty:'No dispatches recorded yet'});
    };
+   const paintRateHistory=()=>{
+    const hist=T('rateHistory').slice().sort((a,b)=>a.date.localeCompare(b.date));
+    el.querySelector('#ratechart').innerHTML=hist.length?K.barChart(hist.map(h=>({l:fmtDate(h.date).slice(0,6),v:h.poundRate})),'money'):K.empty('No rate changes logged yet');
+   };
+   const paintMarket=()=>{
+    const box=el.querySelector('#marketbox');if(!box)return;
+    const pt=marketHist[marketHist.length-1];const d=marketDerived(pt);
+    const rt=rates();const spread=r2(rt.pound-d.ghsPerPound);const spreadPct=d.ghsPerPound>0?r2(spread/d.ghsPerPound*100):0;
+    box.innerHTML=K.strip([
+      ['World gold price','$'+pt.usdOz.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' / oz'],
+      ['USD ⇄ GHS',pt.ghs.toFixed(2)],
+      ['World price / gram','$'+d.usdPerGram.toFixed(2)+' ≈ '+money(d.ghsPerGram)],
+      ['World equivalent / pound-unit',money(d.ghsPerPound)]
+     ])+row2('Your buying rate vs. world equivalent',(spread>=0?'<span style="color:var(--ok)">+':'<span style="color:var(--bad)">')+money(spread)+' ('+spreadPct+'%)</span>',1)+
+     '<div id="marketchart" style="margin-top:8px"></div>'+
+     '<p class="muted small" style="margin-top:8px">Simulated live feed for demo purposes — this app works fully offline, so it can’t reach a real market/forex price from inside the page. Correct the anchor values below to match today’s actual print.</p>';
+    el.querySelector('#marketchart').innerHTML=K.barChart(marketHist.slice(-14).map((x,i)=>({l:'',v:x.ghs*x.usdOz/OZ_TO_GRAMS})),'money');
+   };
+   const tick=()=>{
+    if(!el.querySelector('#marketbox')){stopMarketTicker();return;}
+    marketTick();paintMarket();
+   };
    const draw=()=>{
-    const st=stockTotal();const rt=rates();
+    const st=stockPoundEq();const byKind=stockByKind();const rt=rates();
     el.innerHTML='<div class="grid2"><div class="stack">'+
      '<div class="card"><h3>Gold in stock</h3><div class="kpis" style="grid-template-columns:repeat(3,1fr)">'+
-      kpi('Pounds',st.p)+kpi('Blades',st.b)+kpi('Matches',st.m)+
-     '</div><p class="muted small" style="margin-top:10px">Matches are the free weight retained from every purchase — real gold the dealership holds at no cost.</p></div>'+
-     '<div class="card"><h3>Dispatch / sell gold onward</h3>'+
-      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">'+
-       '<label class="fld"><span>Pounds</span><input id="df_p" type="number" min="0" value="0" data-inp="dwp"></label>'+
-       '<label class="fld"><span>Blades</span><input id="df_b" type="number" min="0" value="0" data-inp="dwb"></label>'+
-       '<label class="fld"><span>Matches</span><input id="df_m" type="number" min="0" value="0" data-inp="dwm"></label>'+
+      '<div class="kpi"><span class="kl">Total</span><b class="kv">'+fmtLb(st)+'</b></div>'+
+      '<div class="kpi"><span class="kl">Refined</span><b class="kv">'+fmtLb(byKind.refined)+'</b></div>'+
+      '<div class="kpi"><span class="kl">Box</span><b class="kv">'+fmtLb(byKind.box)+'</b></div>'+
       '</div>'+
+      '<p class="muted small" style="margin-top:10px">Refined purchases already come in pounds; Box purchases are converted at 10 blade-equivalents = 1 pound-equivalent, so both sit on one scale — but dispatches are tagged by pile, so the split above is exact, not estimated.</p></div>'+
+     '<div class="card"><h3>Dispatch / sell gold onward</h3>'+
+      '<label class="fld" style="margin-bottom:10px"><span>From stock</span><select id="df_kind" data-chg="dkind"><option value="refined">Refined ('+fmtLb(byKind.refined)+')</option><option value="box">Box ('+fmtLb(byKind.box)+')</option></select></label>'+
+      '<label class="fld"><span>Weight to dispatch (pound-equivalent)</span><input id="df_poundeq" type="number" min="0" step="0.01" value="0" data-inp="dwp"></label>'+
       '<label class="fld full" style="margin:10px 0"><span>Sold to</span><input id="df_to" placeholder="e.g. Precious Metals Refinery"></label>'+
       '<div class="card" id="df_preview" style="background:var(--paper);margin-bottom:12px"></div>'+
       '<button class="btn acc lg" style="width:100%" data-act="dispatch">Record dispatch</button>'+
      '</div>'+
      '</div><div class="stack">'+
+     '<div class="card"><h3>World Gold Market <span class="badge b-mute" style="font-weight:600">simulated live</span></h3><div id="marketbox"></div>'+
+      '<div class="fgrid" style="margin-top:12px">'+
+       '<label class="fld"><span>Anchor: world price (USD/oz)</span><input id="mk_oz" type="number" step="0.01" value="'+(K.setting('worldGoldUsdOz'))+'"></label>'+
+       '<label class="fld"><span>Anchor: USD → GHS rate</span><input id="mk_fx" type="number" step="0.01" value="'+(K.setting('usdGhsRate'))+'"></label>'+
+      '</div>'+
+      '<button class="btn sm" style="margin-top:8px" data-act="resetmarket">Reset live feed to these anchors</button>'+
+     '</div>'+
      '<div class="card"><h3>Buying &amp; resale rates</h3>'+
       '<label class="fld" style="margin-bottom:10px"><span>Rate per Pound (GH₵)</span><input id="rf_pound" type="number" step="0.01" value="'+rt.pound+'"></label>'+
       '<label class="fld" style="margin-bottom:10px"><span>Rate per Blade (GH₵)</span><input id="rf_blade" type="number" step="0.01" value="'+rt.blade+'"></label>'+
-      '<label class="fld"><span>Resale rate per Pound-equivalent (GH₵)</span><input id="rf_resale" type="number" step="0.01" value="'+rt.resale+'"></label>'+
+      '<label class="fld"><span>Resale rate per pound-equivalent (GH₵)</span><input id="rf_resale" type="number" step="0.01" value="'+rt.resale+'"></label>'+
       '<button class="btn pri" style="margin-top:12px" data-act="saverates">Save rates</button>'+
      '</div>'+
+     '<div class="card"><h3>Your rate history</h3><div id="ratechart"></div></div>'+
      '<div class="card"><h3>Recent dispatches</h3><div id="dtab"></div></div>'+
      '</div></div>';
-    paintDispatchPreview();paintDispatches();
+    paintDispatchPreview();paintDispatches();paintRateHistory();
+    if(!marketHist)seedMarketHist();
+    paintMarket();
+    stopMarketTicker();marketTimer=setInterval(tick,2200);
    };
    function dispatch(){
-    const rt=rates();const nw=normW(readD());
-    if(nw.p===0&&nw.b===0&&nw.m===0){K.toast('Enter a weight greater than zero','bad');return;}
-    if(unitsOf(nw)>unitsOf(stockTotal())){K.toast('Only '+fmtW(stockTotal())+' in stock','bad');return;}
+    const rt=rates();const w=readD();const kind=readKind();
+    if(w<=0){K.toast('Enter a weight greater than zero','bad');return;}
+    if(w>stockByKind()[kind]){K.toast('Only '+fmtLb(stockByKind()[kind])+' of '+kind+' gold in stock','bad');return;}
     const to=el.querySelector('#df_to').value.trim()||'Buyer';
-    const revenue=r2(poundEq(nw)*rt.resale);
+    const revenue=r2(w*rt.resale);
     const n=T('dispatches').length+1;
-    add('dispatches',{ref:'GD-'+pad(n,4),date:today(),time:nowTime(),to,p:nw.p,b:nw.b,m:nw.m,rate:rt.resale,revenue});
-    K.save();K.log('Dispatched '+fmtW(nw)+' to '+to+' — '+money(revenue));K.toast('Dispatch recorded','ok');
+    add('dispatches',{ref:'GD-'+pad(n,4),date:today(),time:nowTime(),to,kind,poundEq:w,rate:rt.resale,revenue});
+    K.save();K.log('Dispatched '+fmtLb(w)+' ('+kind+') to '+to+' — '+money(revenue));K.toast('Dispatch recorded','ok');
     draw();
    }
    function saveRates(){
     const p=Number(el.querySelector('#rf_pound').value)||0,b=Number(el.querySelector('#rf_blade').value)||0,rs=Number(el.querySelector('#rf_resale').value)||0;
     K.setting('poundRate',p);K.setting('bladeRate',b);K.setting('resaleRate',rs);
+    add('rateHistory',{date:today(),poundRate:p,bladeRate:b,resaleRate:rs});
     K.log('Updated gold buying/resale rates');K.toast('Rates saved','ok');draw();
    }
-   K.bind(el,{dwp:paintDispatchPreview,dwb:paintDispatchPreview,dwm:paintDispatchPreview,dispatch:()=>dispatch(),saverates:()=>saveRates()});
+   function resetMarket(){
+    const oz=Number(el.querySelector('#mk_oz').value)||2650,fx=Number(el.querySelector('#mk_fx').value)||15.3;
+    K.setting('worldGoldUsdOz',oz);K.setting('usdGhsRate',fx);
+    seedMarketHist();K.toast('Live feed reset to your anchors','ok');paintMarket();
+   }
+   K.bind(el,{dwp:paintDispatchPreview,dkind:paintDispatchPreview,dispatch:()=>dispatch(),saverates:()=>saveRates(),resetmarket:()=>resetMarket()});
    draw();
   },
 
   sellers(el){
+   stopMarketTicker();
    K.crud(el,{table:'sellers',noun:'seller',addLabel:'Add seller',search:['name','phone'],sort:(a,b)=>a.name.localeCompare(b.name),
     cols:[{l:'Seller',f:s=>'<b>'+esc(s.name)+'</b><span class="sub2">'+esc(s.phone||'')+'</span>'},
      {l:'Times sold to us',cls:'num',f:s=>T('purchases').filter(p=>p.sellerId===s.id).length},
-     {l:'Total supplied',f:s=>fmtW(T('purchases').filter(p=>p.sellerId===s.id).reduce((a,x)=>addW(a,{p:x.p,b:x.b,m:x.m}),{p:0,b:0,m:0}))},
+     {l:'Total supplied',f:s=>fmtLb(sum(T('purchases').filter(p=>p.sellerId===s.id),p=>p.poundEq))},
      {l:'Total paid',cls:'num',f:s=>money(sum(T('purchases').filter(p=>p.sellerId===s.id),p=>p.amount))}
     ],
     fields:[{k:'name',l:'Seller name',req:1,w:'full'},{k:'phone',l:'Phone (optional)'}]
@@ -1112,6 +1314,7 @@ const APP_CONFIG={
   },
 
   staff(el){
+   stopMarketTicker();
    K.crud(el,{table:'staff',noun:'staff member',addLabel:'Add staff',search:['name','phone'],sort:(a,b)=>a.name.localeCompare(b.name),
     cols:[{l:'Name',k:'name'},{l:'Role',f:s=>badge(s.role,s.role==='Owner'?'info':'mute')},{l:'Phone',k:'phone'},{l:'Status',f:s=>badge(s.status==='active'?'Active':'Inactive',s.status==='active'?'ok':'mute')}],
     fields:[{k:'name',l:'Full name',req:1,w:'full'},{k:'role',l:'Role',t:'select',opts:['Owner','Weigher'],blank:false},{k:'phone',l:'Phone'},{k:'status',l:'Status',t:'select',opts:[{v:'active',l:'Active'},{v:'inactive',l:'Inactive'}],blank:false}],
@@ -1121,6 +1324,7 @@ const APP_CONFIG={
   },
 
   ledger(el){
+   stopMarketTicker();
    el.innerHTML='<h3 style="margin:0 0 10px">Gold Trading Ledger</h3><div id="ltabs"></div><div id="lbody" style="margin-top:12px"></div>';
    const st={tab:0};
    const TABS=['Purchases (full record)','Dispatches / Resale','Profit report'];
@@ -1129,43 +1333,49 @@ const APP_CONFIG={
     const body=el.querySelector('#lbody');
     if(st.tab===0){
      const rows=T('purchases').slice().sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time));
-     body.innerHTML='<p class="muted small" style="margin-bottom:10px">This internal record includes the Matches retained on every purchase — the seller’s own receipt never shows this column.</p>'+
-      '<div class="card tc">'+K.table([
+     body.innerHTML='<div class="card tc">'+K.table([
        {l:'Ref',f:x=>'<b>'+esc(x.ref)+'</b><span class="sub2">'+fmtDate(x.date)+' '+esc(x.time)+'</span>'},
        {l:'Seller',f:x=>sellerOf(x.sellerId).name},
-       {l:'Paid for',f:x=>x.p+' lb '+x.b+' bl'},
-       {l:'Matches (kept)',cls:'num',f:x=>x.m+' mt'},
-       {l:'Full weight',f:x=>fmtW({p:x.p,b:x.b,m:x.m})},
+       {l:'Type',f:x=>badge(x.kind==='refined'?'Refined':'Box',x.kind==='refined'?'info':'mute')},
+       {l:'Weight',f:x=>x.grams+' g'},
+       {l:'Karat / Blade-eq',f:x=>x.kind==='refined'?x.karat.toFixed(2)+'k':x.bladeEq.toFixed(1)},
+       {l:'Pound-equivalent',cls:'num',f:x=>x.poundEq.toFixed(2)},
        {l:'Weigher',k:'weigher'},
        {l:'Amount paid',cls:'num',f:x=>money(x.amount)}
       ],rows,{empty:'No purchases yet'})+'</div>';
     }else if(st.tab===1){
      const rows=T('dispatches').slice().sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time));
      body.innerHTML='<div class="card tc">'+K.table([
-      {l:'Ref',f:x=>'<b>'+esc(x.ref)+'</b><span class="sub2">'+fmtDate(x.date)+'</span>'},{l:'Sold to',k:'to'},{l:'Weight',f:x=>fmtW({p:x.p,b:x.b,m:x.m})},{l:'Rate',cls:'num',f:x=>money(x.rate)},{l:'Revenue',cls:'num',f:x=>money(x.revenue)}
+      {l:'Ref',f:x=>'<b>'+esc(x.ref)+'</b><span class="sub2">'+fmtDate(x.date)+'</span>'},{l:'Sold to',k:'to'},{l:'Weight',f:x=>fmtLb(x.poundEq)},{l:'Rate',cls:'num',f:x=>money(x.rate)},{l:'Revenue',cls:'num',f:x=>money(x.revenue)}
      ],rows,{empty:'No dispatches yet'})+'</div>';
     }else{
-     // Matching principle: only expense the gold that has actually been sold (dispatched),
-     // not gold still sitting in stock. Cost per pound-equivalent unit is a running weighted
-     // average across everything ever bought — since Matches cost nothing, they quietly pull
-     // this average cost down, which is exactly where the dealer's margin shows up.
-     const purchasesRows=T('purchases');
-     const totalCost=sum(purchasesRows,x=>x.amount);
-     const totalBoughtEq=sum(purchasesRows,x=>poundEq({p:x.p,b:x.b,m:x.m}));
-     const avgCost=totalBoughtEq>0?totalCost/totalBoughtEq:0;
-     const dispatchRows=T('dispatches');
+     // Matching principle: only expense the gold that's actually been sold (dispatched), not
+     // gold still sitting in stock. Refined and Box are costed separately — a weighted average
+     // within each pile — since dispatches are now tagged by which pile they came from, that's
+     // more accurate than one cost blended across two very differently-priced kinds of gold.
+     const purchasesRows=T('purchases'),dispatchRows=T('dispatches');
+     const avgCostOf=kind=>{
+      const rows=purchasesRows.filter(x=>x.kind===kind);
+      const eq=sum(rows,x=>x.poundEq);
+      return eq>0?sum(rows,x=>x.amount)/eq:0;
+     };
+     const avgCostRefined=avgCostOf('refined'),avgCostBox=avgCostOf('box');
      const revenue=sum(dispatchRows,x=>x.revenue);
-     const dispatchedEq=sum(dispatchRows,x=>poundEq({p:x.p,b:x.b,m:x.m}));
-     const cogs=r2(avgCost*dispatchedEq);
+     const dispatchedRefinedEq=sum(dispatchRows.filter(x=>x.kind==='refined'),x=>x.poundEq);
+     const dispatchedBoxEq=sum(dispatchRows.filter(x=>x.kind==='box'),x=>x.poundEq);
+     const cogs=r2(avgCostRefined*dispatchedRefinedEq+avgCostBox*dispatchedBoxEq);
      const gross=r2(revenue-cogs);
      const exp=sum(T('expenses'),x=>x.amount);
      const net=r2(gross-exp);
-     const stockNow=stockTotal();const rt=rates();
-     const stockEq=poundEq(stockNow);
-     const stockCostValue=r2(avgCost*stockEq);
-     const stockMarketValue=r2(stockEq*rt.resale);
+     const byKind=stockByKind();const stockNow=stockPoundEq();const rt=rates();
+     const stockCostValue=r2(avgCostRefined*byKind.refined+avgCostBox*byKind.box);
+     const stockMarketValue=r2(stockNow*rt.resale);
      const unrealizedGain=r2(stockMarketValue-stockCostValue);
      body.innerHTML='<div class="card">'+K.strip([
+       ['Avg. cost — Refined (per lb-eq)',money(avgCostRefined)],
+       ['Avg. cost — Box (per lb-eq)',money(avgCostBox)]
+      ])+'</div>'+
+      '<div class="card" style="margin-top:12px">'+K.strip([
        ['Revenue from dispatches',money(revenue)],
        ['Cost of gold sold (COGS)',out(cogs),'raw'],
        ['Gross profit',pl(gross),'raw'],
@@ -1173,7 +1383,7 @@ const APP_CONFIG={
        ['Net profit',pl(net),'raw']
       ])+'</div>'+
       '<div class="card" style="margin-top:12px"><h3>Gold still in stock (not yet sold — carried as inventory, not an expense)</h3>'+K.strip([
-       ['Current stock',fmtW(stockNow)],
+       ['Current stock',fmtLb(stockNow)],
        ['Inventory value (at cost)',money(stockCostValue)],
        ['Inventory value (at resale rate)',money(stockMarketValue)],
        ['Unrealized gain if sold today',pl(unrealizedGain),'raw']
@@ -1197,21 +1407,17 @@ const APP_CONFIG={
  dashboard(K){
   const t=today(),wk=addDays(t,-6);
   const week=T('purchases').filter(x=>x.date>=wk);
-  const weekW=week.reduce((a,x)=>addW(a,{p:x.p,b:x.b,m:x.m}),{p:0,b:0,m:0});
-  const stockNow=stockTotal();
-  const rt=rates();
-  const totalMatches=sum(T('purchases'),x=>x.m);
-  const matchesVal=r2(totalMatches*(rt.blade/CARRY));
-  const recentP=T('purchases').slice().sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time)).slice(0,5).map(x=>({t:sellerOf(x.sellerId).name,s:fmtW({p:x.p,b:x.b,m:x.m})+' · '+fmtDate(x.date),r:money(x.amount)}));
-  const recentD=T('dispatches').slice().sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time)).slice(0,5).map(x=>({t:x.to,s:fmtW({p:x.p,b:x.b,m:x.m})+' · '+fmtDate(x.date),r:money(x.revenue)}));
+  const stockNow=stockPoundEq();
+  const recentP=T('purchases').slice().sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time)).slice(0,5).map(x=>({t:sellerOf(x.sellerId).name+' ('+(x.kind==='refined'?'Refined':'Box')+')',s:x.grams+'g · '+fmtDate(x.date),r:money(x.amount)}));
+  const recentD=T('dispatches').slice().sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time)).slice(0,5).map(x=>({t:x.to,s:fmtLb(x.poundEq)+' · '+fmtDate(x.date),r:money(x.revenue)}));
   return{
    kpis:[
-    {l:'Bought this week',v:fmtW(weekW),s:week.length+' purchases',tone:'ok'},
+    {l:'Bought this week',v:fmtLb(sum(week,x=>x.poundEq)),s:week.length+' purchases',tone:'ok'},
     {l:'Paid to sellers this week',v:money(sum(week,x=>x.amount)),s:week.length+' transactions'},
-    {l:'Gold in stock',v:fmtW(stockNow),s:'Pounds / Blades / Matches',tone:'info'},
-    {l:'Matches retained (margin)',v:totalMatches+' mt',s:'est. '+money(matchesVal)+' since day one',tone:'ok'}
+    {l:'Gold in stock',v:fmtLb(stockNow),s:'pound-equivalent',tone:'info'},
+    {l:'Cash float remaining',v:money(floatBalance()),s:'as of today',tone:floatBalance()>=0?'ok':'bad'}
    ],
-   chart:{title:'Gold bought — last 7 days (pound-equivalent)',unit:'',data:K.lastDays(7,d=>r2(T('purchases').filter(x=>x.date===d).reduce((a,x)=>a+poundEq({p:x.p,b:x.b,m:x.m}),0)))},
+   chart:{title:'Gold bought — last 7 days (pound-equivalent)',unit:'',data:K.lastDays(7,d=>r2(sum(T('purchases').filter(x=>x.date===d),x=>x.poundEq)))},
    lists:[{title:'Recent purchases',items:recentP,empty:'No purchases yet'},{title:'Recent dispatches',items:recentD,empty:'No dispatches yet'}]
   };
  },
