@@ -747,12 +747,15 @@ const marketTick=()=>{
  if(marketHist.length>36)marketHist.shift();
  return marketHist[marketHist.length-1];
 };
+const AVOIRDUPOIS_LB_GRAMS=453.59237; // the everyday 16oz pound -- NOT the trade pound-unit used elsewhere in this app
 const marketDerived=pt=>{
  const usdPerGram=r2(pt.usdOz/OZ_TO_GRAMS);
  const ghsPerGram=r2(usdPerGram*pt.ghs);
  const ghsPerPound=r2(ghsPerGram*7.75);
  const usdPerPound=r2(usdPerGram*7.75);
- return{usdPerGram,ghsPerGram,ghsPerPound,usdPerPound};
+ const usdPerAvoirdupoisLb=r2(usdPerGram*AVOIRDUPOIS_LB_GRAMS);
+ const ghsPerAvoirdupoisLb=r2(ghsPerGram*AVOIRDUPOIS_LB_GRAMS);
+ return{usdPerGram,ghsPerGram,ghsPerPound,usdPerPound,usdPerAvoirdupoisLb,ghsPerAvoirdupoisLb};
 };
 
 const GOLD={
@@ -888,10 +891,11 @@ const GOLD={
     box.innerHTML=K.strip([
       ['World gold price','$'+pt.usdOz.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' / oz'],
       ['World gold price (pound-unit)','$'+d.usdPerPound.toFixed(2)+' / lb'],
+      ['World gold price (common 16oz lb)','$'+d.usdPerAvoirdupoisLb.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' / lb'],
       ['USD ⇄ GHS',pt.ghs.toFixed(2)],
       ['World price / gram','$'+d.usdPerGram.toFixed(2)+' ≈ '+money(d.ghsPerGram)],
       ['World equivalent / pound-unit',money(d.ghsPerPound)]
-     ])+'<p class="muted small" style="margin-top:8px">"Pound-unit" here matches your own buying-rate unit (7.75g) — the same one used for Rate per Pound below — not the everyday avoirdupois pound.</p>'+
+     ])+'<p class="muted small" style="margin-top:8px">Two different "pounds" shown on purpose: <b>pound-unit</b> matches your own buying-rate unit (7.75g, same as Rate per Pound below); <b>common 16oz lb</b> is the everyday avoirdupois pound (453.6g) some clients may compare against international quotes with.</p>'+
      row2('Your buying rate vs. world equivalent',(spread>=0?'<span style="color:var(--ok)">+':'<span style="color:var(--bad)">')+money(spread)+' ('+spreadPct+'%)</span>',1)+
      '<div id="marketchart" style="margin-top:8px"></div>'+
      (marketLive?'<p class="muted small" style="margin-top:8px">Live gold + forex feed, refreshed when you open this page. Small moves between refreshes are a cosmetic animation, not new quotes.</p>'

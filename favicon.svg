@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#152238"/>
+  <g fill="none" stroke="#D9A833" stroke-width="6.2" stroke-linecap="round" stroke-linejoin="round">
+    <!-- left loop + tail crossing to bottom-right -->
+    <path d="M 32 32
+             C 32 21, 24 15, 18 20
+             C 12 25, 15 34, 24 34
+             C 29 34, 32 31, 32 32
+             C 32 40, 40 47, 46 43"/>
+    <!-- right loop + tail crossing to bottom-left, with a gap where it passes under the other strand -->
+    <path d="M 32 32
+             C 32 21, 40 15, 46 20
+             C 52 25, 49 34, 40 34
+             C 36.4 34, 33.6 32.6, 32.4 30.8
+             M 30.2 33.6
+             C 27 39, 20 45, 18 43"/>
+  </g>
+</svg>
