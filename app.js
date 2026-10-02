@@ -709,19 +709,34 @@ const KCHART_MODAL=()=>{
 };
 
 // ---- World gold market tracker ----
-// This version is now HOSTED (real internet access), unlike the offline demo — but it
-// still random-walks around an anchor rather than calling a real price feed, because
-// that needs a paid API key this build doesn't have. Swap seedMarketHist/marketTick
-// for a fetch() to a real gold/forex API (e.g. via a small serverless function that
-// holds the API key server-side) when you're ready to go fully live — the rest of the
-// screen (chart, spread, anchors) doesn't need to change.
+// Backed by a real feed: the world-gold-price Supabase Edge Function proxies
+// MetalAPI (XAU/USD) + open.er-api.com (USD/GHS), keeping the API key off
+// the client. fetchLiveMarket() pulls a fresh anchor each time the Stock
+// view opens; between fetches, a small cosmetic random-walk (seedMarketHist/
+// marketTick) keeps the chart feeling alive without pretending every 2.2s
+// tick is a new real quote. If the live fetch fails (no connection, secret
+// not configured yet, etc.) it falls back to the owner's manual anchor
+// below, same as before.
 const OZ_TO_GRAMS=31.1035;
-let marketHist=null,marketTimer=null;
+let marketHist=null,marketTimer=null,marketLive=false,marketAsOf=null;
 const stopMarketTicker=()=>{if(marketTimer){clearInterval(marketTimer);marketTimer=null;}};
 const seedMarketHist=()=>{
  const s=S.settings;let usdOz=Number(s.worldGoldUsdOz)||2650,ghs=Number(s.usdGhsRate)||15.3;
  marketHist=[];
  for(let i=20;i>=0;i--){usdOz=r2(usdOz*(1+(Math.random()-0.5)*0.0016));ghs=r2(Math.max(1,ghs*(1+(Math.random()-0.5)*0.0008)));marketHist.push({usdOz,ghs});}
+};
+const fetchLiveMarket=async()=>{
+ try{
+  const{data,error}=await sb.functions.invoke('world-gold-price');
+  if(error||!data||!data.usdOz||!data.usdGhs)throw error||new Error('bad response');
+  K.setting('worldGoldUsdOz',data.usdOz);K.setting('usdGhsRate',data.usdGhs);
+  marketLive=true;marketAsOf=data.asOf;
+  seedMarketHist();
+  return true;
+ }catch(e){
+  marketLive=false;marketAsOf=null;
+  return false;
+ }
 };
 const marketTick=()=>{
  if(!marketHist)seedMarketHist();
@@ -867,6 +882,8 @@ const GOLD={
     const box=el.querySelector('#marketbox');if(!box)return;
     const pt=marketHist[marketHist.length-1];const d=marketDerived(pt);
     const rt=rates();const spread=r2(rt.pound-d.ghsPerPound);const spreadPct=d.ghsPerPound>0?r2(spread/d.ghsPerPound*100):0;
+    const badgeEl=el.querySelector('#marketbadge');
+    if(badgeEl)badgeEl.outerHTML=marketLive?'<span class="badge b-ok" id="marketbadge" style="font-weight:600" title="'+esc(marketAsOf||'')+'">live</span>':'<span class="badge b-mute" id="marketbadge" style="font-weight:600">simulated</span>';
     box.innerHTML=K.strip([
       ['World gold price','$'+pt.usdOz.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' / oz'],
       ['USD ⇄ GHS',pt.ghs.toFixed(2)],
@@ -874,7 +891,8 @@ const GOLD={
       ['World equivalent / pound-unit',money(d.ghsPerPound)]
      ])+row2('Your buying rate vs. world equivalent',(spread>=0?'<span style="color:var(--ok)">+':'<span style="color:var(--bad)">')+money(spread)+' ('+spreadPct+'%)</span>',1)+
      '<div id="marketchart" style="margin-top:8px"></div>'+
-     '<p class="muted small" style="margin-top:8px">Simulated feed — wire up a real gold/forex price API when you’re ready (see code comments). Correct the anchor values below to match today’s actual print in the meantime.</p>';
+     (marketLive?'<p class="muted small" style="margin-top:8px">Live gold + forex feed, refreshed when you open this page. Small moves between refreshes are a cosmetic animation, not new quotes.</p>'
+                :'<p class="muted small" style="margin-top:8px">Live feed unavailable right now (check the connection or the price-feed setup) — showing a simulation around your anchor values below. Correct them to match today’s actual print in the meantime.</p>');
     el.querySelector('#marketchart').innerHTML=K.barChart(marketHist.slice(-14).map((x,i)=>({l:'',v:x.ghs*x.usdOz/OZ_TO_GRAMS})),'money');
    };
    const tick=()=>{
@@ -898,7 +916,7 @@ const GOLD={
       '<button class="btn acc lg" style="width:100%" data-act="dispatch">Record dispatch</button>'+
      '</div>'+
      '</div><div class="stack">'+
-     '<div class="card"><h3>World Gold Market <span class="badge b-mute" style="font-weight:600">simulated</span></h3><div id="marketbox"></div>'+
+     '<div class="card"><h3>World Gold Market <span class="badge b-mute" id="marketbadge" style="font-weight:600">checking…</span></h3><div id="marketbox"></div>'+
       '<div class="fgrid" style="margin-top:12px">'+
        '<label class="fld"><span>Anchor: world price (USD/oz)</span><input id="mk_oz" type="number" step="0.01" value="'+(K.setting('worldGoldUsdOz'))+'"></label>'+
        '<label class="fld"><span>Anchor: USD → GHS rate</span><input id="mk_fx" type="number" step="0.01" value="'+(K.setting('usdGhsRate'))+'"></label>'+
@@ -917,6 +935,7 @@ const GOLD={
     paintDispatchPreview();paintDispatches();paintRateHistory();
     if(!marketHist)seedMarketHist();
     paintMarket();
+    fetchLiveMarket().then(()=>{if(el.querySelector('#marketbox'))paintMarket();});
     stopMarketTicker();marketTimer=setInterval(tick,2200);
    };
    function dispatch(){
