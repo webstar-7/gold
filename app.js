@@ -751,7 +751,8 @@ const marketDerived=pt=>{
  const usdPerGram=r2(pt.usdOz/OZ_TO_GRAMS);
  const ghsPerGram=r2(usdPerGram*pt.ghs);
  const ghsPerPound=r2(ghsPerGram*7.75);
- return{usdPerGram,ghsPerGram,ghsPerPound};
+ const usdPerPound=r2(usdPerGram*7.75);
+ return{usdPerGram,ghsPerGram,ghsPerPound,usdPerPound};
 };
 
 const GOLD={
@@ -886,10 +887,12 @@ const GOLD={
     if(badgeEl)badgeEl.outerHTML=marketLive?'<span class="badge b-ok" id="marketbadge" style="font-weight:600" title="'+esc(marketAsOf||'')+'">live</span>':'<span class="badge b-mute" id="marketbadge" style="font-weight:600">simulated</span>';
     box.innerHTML=K.strip([
       ['World gold price','$'+pt.usdOz.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' / oz'],
+      ['World gold price (pound-unit)','$'+d.usdPerPound.toFixed(2)+' / lb'],
       ['USD ⇄ GHS',pt.ghs.toFixed(2)],
       ['World price / gram','$'+d.usdPerGram.toFixed(2)+' ≈ '+money(d.ghsPerGram)],
       ['World equivalent / pound-unit',money(d.ghsPerPound)]
-     ])+row2('Your buying rate vs. world equivalent',(spread>=0?'<span style="color:var(--ok)">+':'<span style="color:var(--bad)">')+money(spread)+' ('+spreadPct+'%)</span>',1)+
+     ])+'<p class="muted small" style="margin-top:8px">"Pound-unit" here matches your own buying-rate unit (7.75g) — the same one used for Rate per Pound below — not the everyday avoirdupois pound.</p>'+
+     row2('Your buying rate vs. world equivalent',(spread>=0?'<span style="color:var(--ok)">+':'<span style="color:var(--bad)">')+money(spread)+' ('+spreadPct+'%)</span>',1)+
      '<div id="marketchart" style="margin-top:8px"></div>'+
      (marketLive?'<p class="muted small" style="margin-top:8px">Live gold + forex feed, refreshed when you open this page. Small moves between refreshes are a cosmetic animation, not new quotes.</p>'
                 :'<p class="muted small" style="margin-top:8px">Live feed unavailable right now (check the connection or the price-feed setup) — showing a simulation around your anchor values below. Correct them to match today’s actual print in the meantime.</p>');
