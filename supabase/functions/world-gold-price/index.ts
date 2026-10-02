@@ -2,19 +2,22 @@
 //
 // Proxies a real gold spot price (XAU/USD) and a USD->GHS forex rate to
 // the app, so the "World Gold Market" card can show a real feed instead
-// of the local random-walk simulation. This has to be a server-side
-// function (not a direct browser call) so the MetalAPI key never reaches
-// client code or the public GitHub repo.
+// of the local random-walk simulation.
 //
-// MetalAPI (https://www.metalapi.com) supplies XAU/USD -- note it wants
-// the key via an Authorization: Bearer header (its query-param auth and
-// documented param names did not work in testing; the header did).
-// It does not list GHS among its supported currencies, so USD->GHS comes
-// from a separate, free, no-key forex API (open.er-api.com) instead.
+// HISTORY: originally used metalapi.com for the gold leg. Its free plan
+// accepted the API key and counted requests against the quota, but
+// actually returned a fixed/stale sample price (matched its own docs'
+// example value to 6 decimal places, and was less than half the real
+// market price when checked against independent sources) -- their
+// pricing page says the free tier only gets "daily updates", not live
+// data. Switched to gold-api.com, which needs no key/signup, has no
+// rate limit, and was verified against two independent sources to
+// return the correct current price.
 //
-// Deploy:
-//   supabase functions deploy world-gold-price --project-ref kgpdapzwxgwnhzfsamro
-//   supabase secrets set METALAPI_KEY=mk_live_xxxxxxxx --project-ref kgpdapzwxgwnhzfsamro
+// A sanity floor rejects anything below $1000/oz (gold hasn't traded
+// that low in over a decade) so a similarly-wrong response from any
+// future provider swap fails loudly instead of silently showing a bad
+// number as "live".
 //
 // Call from the app:
 //   const { data, error } = await sb.functions.invoke('world-gold-price');
@@ -28,27 +31,11 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   try {
-    const METALAPI_KEY = Deno.env.get("METALAPI_KEY");
-    if (!METALAPI_KEY) {
-      return new Response(JSON.stringify({ error: "METALAPI_KEY secret not set on this project" }), {
-        status: 500,
-        headers: { ...cors, "Content-Type": "application/json" },
-      });
-    }
-
-    const goldRes = await fetch("https://metalapi.com/api/v1/latest?base=USD&currencies=XAU", {
-      headers: { "Authorization": `Bearer ${METALAPI_KEY}` },
-    });
+    const goldRes = await fetch("https://api.gold-api.com/price/XAU");
     const goldJson = await goldRes.json().catch(() => null);
-    if (!goldRes.ok || !goldJson?.rates) {
-      return new Response(JSON.stringify({ error: "Gold price fetch failed", status: goldRes.status, detail: goldJson }), {
-        status: 502,
-        headers: { ...cors, "Content-Type": "application/json" },
-      });
-    }
-    const usdOz = goldJson.rates.USDXAU ?? (goldJson.rates.XAU ? 1 / goldJson.rates.XAU : null);
-    if (!usdOz) {
-      return new Response(JSON.stringify({ error: "Unexpected gold price response shape", detail: goldJson }), {
+    const usdOz = goldJson?.price;
+    if (!goldRes.ok || !usdOz || usdOz < 1000) {
+      return new Response(JSON.stringify({ error: "Gold price fetch failed or implausible", status: goldRes.status, detail: goldJson }), {
         status: 502,
         headers: { ...cors, "Content-Type": "application/json" },
       });
@@ -69,7 +56,7 @@ Deno.serve(async (req) => {
         usdOz: Number(usdOz),
         usdGhs: Number(usdGhs),
         asOf: new Date().toISOString(),
-        source: "metalapi.com (XAU/USD) + open.er-api.com (USD/GHS)",
+        source: "gold-api.com (XAU/USD) + open.er-api.com (USD/GHS)",
       }),
       { headers: { ...cors, "Content-Type": "application/json" } }
     );
