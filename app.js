@@ -26,6 +26,9 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const C={name:'NYANSATEK Gold',product:'Gold Dealership Manager',vendorName:'NYANSATEK',vendorPhone:'0536340578',
  tagline:'Weigh in Refined or Box gold, price it exactly the way the Gold App does — karat chart and all — pay the seller on the spot, and track the day’s cash float.'};
+// The NYANSATEK brand mark (same artwork as favicon.svg), inlined so it can be
+// dropped into any .mono tile at any size without an extra request.
+const LOGO_SVG='<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><rect width="64" height="64" rx="14" fill="#152238"/><g fill="none" stroke="#D9A833" stroke-width="6.2" stroke-linecap="round" stroke-linejoin="round"><path d="M 32 32 C 32 21, 24 15, 18 20 C 12 25, 15 34, 24 34 C 29 34, 32 31, 32 32 C 32 40, 40 47, 46 43"/><path d="M 32 32 C 32 21, 40 15, 46 20 C 52 25, 49 34, 40 34 C 36.4 34, 33.6 32.6, 32.4 30.8 M 30.2 33.6 C 27 39, 20 45, 18 43"/></g></svg>';
 let S=null,user=null,org=null,cur='dashboard';
 
 /* ================= generic helpers (unchanged from the demo engine) ================= */
@@ -463,7 +466,7 @@ function homeFor(){return user&&user.role==='staff'?'purchase':'dashboard';}
 function titleOf(id){const n=NAV_BASE.find(x=>x.id===id);return n?n.label:'';}
 function chromeSide(){
  const s=document.getElementById('side');
- s.innerHTML='<div class="brand"><div class="mono">'+esc(initials(S.settings.org))+'</div><div><b>'+esc(S.settings.org)+'</b><small>'+esc(C.product)+'</small></div></div><nav class="nav" aria-label="Main">'+
+ s.innerHTML='<div class="brand"><div class="mono">'+LOGO_SVG+'</div><div><b>'+esc(S.settings.org)+'</b><small>'+esc(C.product)+'</small></div></div><nav class="nav" aria-label="Main">'+
   navItems().map(n=>'<button type="button" data-nav="'+n.id+'" class="'+(n.id===cur?'on':'')+'">'+K.icon(n.icon)+'<span>'+esc(n.label)+'</span></button>').join('')+'</nav>'+
   '<div class="foot"><div><b>'+esc(user?user.name:'')+'</b><span>'+esc(user&&user.role==='owner'?'Owner':'Staff')+'</span></div><button type="button" data-act="logout">Sign out</button></div>';
  s.onclick=e=>{const b=e.target.closest('[data-nav]');if(b){go(b.dataset.nav);return;}if(e.target.closest('[data-act="logout"]')){signOut();}};
@@ -559,7 +562,7 @@ async function signOut(){
 function showLogin(msg){
  document.getElementById('app').hidden=true;
  const l=document.getElementById('login');l.hidden=false;
- l.innerHTML='<div class="login-l"><div><div class="mono">NG</div><h1>NYANSATEK Gold</h1><p class="tag">'+esc(C.tagline)+'</p></div><ul><li><i></i>Your records are backed up automatically, under your own account</li><li><i></i>Staff get their own logins with their own access</li><li><i></i>Works from a phone, tablet, or the shop computer</li></ul></div>'+
+ l.innerHTML='<div class="login-l"><div><div class="mono">'+LOGO_SVG+'</div><h1>NYANSATEK Gold</h1><p class="tag">'+esc(C.tagline)+'</p></div><ul><li><i></i>Your records are backed up automatically, under your own account</li><li><i></i>Staff get their own logins with their own access</li><li><i></i>Works from a phone, tablet, or the shop computer</li></ul></div>'+
   '<div class="login-r"><form class="login-card" id="lf"><h2>Sign in</h2><p class="sub">Use your business name (owner) or your staff username.</p>'+
   '<label class="fld" style="margin-bottom:12px"><span>Business name or username</span><input id="lu" type="text" autocomplete="username"></label>'+
   '<label class="fld"><span>Password</span><div class="pwwrap"><input id="lp" type="password" autocomplete="current-password"><button type="button" class="pwtoggle" data-pwtoggle="lp">Show</button></div></label>'+

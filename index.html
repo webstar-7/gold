@@ -27,13 +27,13 @@ h1,h2,h3,h4,p{margin:0}
 
 /* ---------- login ---------- */
 .login{min-height:100vh;display:grid;grid-template-columns:minmax(320px,46%) 1fr}
-.login-l{background:var(--ink);color:#eef1f8;padding:56px 52px;display:flex;flex-direction:column;justify-content:space-between}
+.login-l{background:var(--accent);color:var(--ink);padding:56px 52px;display:flex;flex-direction:column;justify-content:space-between}
 .login-l .mono{width:56px;height:56px;font-size:24px;border-radius:15px}
-.login-l h1{font-size:34px;line-height:1.12;margin:26px 0 12px;font-weight:700;letter-spacing:-.4px}
-.login-l p.tag{font-size:16px;color:rgba(238,241,248,.75);max-width:34ch}
+.login-l h1{font-size:34px;line-height:1.12;margin:26px 0 12px;font-weight:700;letter-spacing:-.4px;color:var(--ink)}
+.login-l p.tag{font-size:16px;color:rgba(23,38,74,.75);max-width:34ch}
 .login-l ul{list-style:none;padding:0;margin:0;display:grid;gap:14px}
-.login-l li{display:flex;gap:12px;align-items:flex-start;color:rgba(238,241,248,.86);font-size:14.5px}
-.login-l li i{flex:none;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-top:8px}
+.login-l li{display:flex;gap:12px;align-items:flex-start;color:rgba(23,38,74,.86);font-size:14.5px}
+.login-l li i{flex:none;width:8px;height:8px;border-radius:50%;background:var(--ink);margin-top:8px}
 .login-r{display:grid;place-items:center;padding:32px}
 .login-card{width:100%;max-width:380px}
 .login-card h2{font-size:22px;margin-bottom:4px}
@@ -46,7 +46,8 @@ h1,h2,h3,h4,p{margin:0}
 .app{display:grid;grid-template-columns:244px 1fr;min-height:100vh;min-width:0}
 .side{background:var(--ink);color:#e9edf7;display:flex;flex-direction:column;padding:18px 14px;position:sticky;top:0;height:100vh;min-width:0}
 .brand{display:flex;gap:11px;align-items:center;padding:4px 6px 18px}
-.mono{width:40px;height:40px;border-radius:11px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-weight:800;font-size:16px;flex:none}
+.mono{width:40px;height:40px;border-radius:11px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-weight:800;font-size:16px;flex:none;overflow:hidden;padding:0}
+.mono svg{width:100%;height:100%;display:block}
 .brand b{display:block;font-size:14.5px;line-height:1.2}
 .brand small{color:rgba(233,237,247,.62);font-size:12px}
 .nav{display:flex;flex-direction:column;gap:2px;overflow:auto;padding-right:2px}
