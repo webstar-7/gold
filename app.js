@@ -82,10 +82,10 @@ const ADAPTERS={
  purchases:{
   table:'purchases',
   toApp:r=>({id:r.id,ref:r.ref,date:r.occurred_on,time:timeOf(r.created_at),sellerId:r.seller_id||'',weigher:r.weigher||'',
-   kind:r.kind,grams:Number(r.grams),density:r.density!=null?Number(r.density):undefined,pounds:r.pounds!=null?Number(r.pounds):undefined,
+   kind:r.kind,chart:(r.chart==='new'||(r.chart==null&&String(r.ref||'').indexOf('GN-')===0))?'new':'old',grams:Number(r.grams),density:r.density!=null?Number(r.density):undefined,pounds:r.pounds!=null?Number(r.pounds):undefined,
    karat:r.karat!=null?Number(r.karat):undefined,bladeEq:r.blade_eq!=null?Number(r.blade_eq):undefined,
    poundEq:Number(r.pound_eq),amount:Number(r.amount)}),
-  toDb:a=>({id:a.id,org_id:org.id,ref:a.ref,kind:a.kind,grams:a.grams,density:a.density==null?null:a.density,karat:a.karat==null?null:a.karat,
+  toDb:a=>({id:a.id,org_id:org.id,ref:a.ref,kind:a.kind,chart:a.chart==='new'?'new':'old',grams:a.grams,density:a.density==null?null:a.density,karat:a.karat==null?null:a.karat,
    pounds:a.pounds==null?null:a.pounds,blade_eq:a.bladeEq==null?null:a.bladeEq,pound_eq:a.poundEq,amount:a.amount,
    seller_id:a.sellerId||null,weigher:a.weigher||null,occurred_on:a.date})
  },
@@ -638,19 +638,34 @@ const lookupKarat=idx=>{
  const pos=Math.min(KCHART.length-1,Math.max(0,Math.round((idx-KCHART_MIN)*100)));
  return{karat:KCHART[pos],flag:null};
 };
+// ---- NEW KARAT CHART (new directive) ----
+// Every karat on the original chart multiplied by 0.99, truncated to 2 decimals (this app
+// truncates, never rounds). The original KCHART above is untouched. The reduced karat is the
+// one used for the 23k test, the rate factor and the price.
+const NEW_KCHART_MULT=0.99;
+const NEW_KCHART=KCHART.map(k=>trunc(k*NEW_KCHART_MULT,2));
+const lookupKaratNew=idx=>{
+ const base=lookupKarat(idx);
+ // readings above the chart (24.00 on the original) take the 0.99 step too
+ return{karat:trunc(base.karat*NEW_KCHART_MULT,2),oldKarat:base.karat,flag:base.flag};
+};
 const rates=()=>({pound:Number(K.setting('poundRate'))||0,blade:Number(K.setting('bladeRate'))||0,resale:Number(K.setting('resaleRate'))||0});
 
-function refinedCalc(grams,density,rt){
+// chart = 'old' (original Karat Chart, default) or 'new' (New Karat Chart = chart karat × 0.99)
+function refinedCalc(grams,density,rt,chart){
  grams=Number(grams)||0;density=Number(density)||0;
  if(grams<=0||density<=0)return null;
+ chart=chart==='new'?'new':'old';
  const pounds=trunc(grams/7.75,2);
  const karatIndex=trunc(grams/density,2);
- const look=lookupKarat(karatIndex);
+ const look=chart==='new'?lookupKaratNew(karatIndex):lookupKarat(karatIndex);
  const karat=look.karat;
  const factor=karat>=23?1:trunc(karat/23,2);
  const adjRate=r2(rt.pound*factor);
  const amount=r2(pounds*adjRate);
- return{kind:'refined',grams,density,pounds,karatIndex,karat,factor,adjRate,amount,poundEq:pounds,flag:look.flag};
+ const res={kind:'refined',chart,grams,density,pounds,karatIndex,karat,factor,adjRate,amount,poundEq:pounds,flag:look.flag};
+ if(chart==='new')res.oldKarat=look.oldKarat;
+ return res;
 }
 function boxCalc(grams,rt){
  grams=Number(grams)||0;
@@ -691,11 +706,11 @@ function dailyBalances(){
 
 const purchaseReceipt=row=>{
  const s=sellerOf(row.sellerId);
- if(row.kind==='refined')return{title:'Gold purchase receipt — Refined',
+ if(row.kind==='refined'){const isNew=row.chart==='new';return{title:'Gold purchase receipt — Refined'+(isNew?' (New Karat Chart)':''),
   meta:[['Receipt No.',row.ref],['Date',fmtDate(row.date)+' '+row.time],['Seller',s.name],['Weighed by',row.weigher||'—']],
   items:[],
-  totals:[['Weight',row.grams+' g'],['Density',row.density],['Karat (chart)',row.karat.toFixed(2)],['Weight — Pounds',row.pounds.toFixed(2)+' lb'],['Amount paid',money(row.amount),1]],
-  foot:'Thank you for your business'};
+  totals:[['Weight',row.grams+' g'],['Density',row.density],[isNew?'Karat (new chart)':'Karat (chart)',row.karat.toFixed(2)],['Weight — Pounds',row.pounds.toFixed(2)+' lb'],['Amount paid',money(row.amount),1]],
+  foot:'Thank you for your business'};}
  return{title:'Gold purchase receipt — Box (raw)',
   meta:[['Receipt No.',row.ref],['Date',fmtDate(row.date)+' '+row.time],['Seller',s.name],['Weighed by',row.weigher||'—']],
   items:[],
@@ -703,12 +718,28 @@ const purchaseReceipt=row=>{
   foot:'Thank you for your business'};
 };
 
-const KCHART_MODAL=()=>{
- const rowsHtml=KCHART.map((k,i)=>{const d=r2(KCHART_MIN+i*0.01);return '<tr><td>'+d.toFixed(2)+'</td><td>'+k.toFixed(2)+'</td></tr>';}).join('');
- K.modal({title:'Gold Karat Chart — Royal Ama Yaba Ent.',wide:true,
-  body:'<p class="muted small" style="margin-bottom:8px">Density (from the water test) on the left, the karat it corresponds to on the right.</p>'+
-   '<div style="max-height:60vh;overflow:auto"><table style="width:100%;border-collapse:collapse"><thead style="position:sticky;top:0;background:#fff"><tr><th style="text-align:left;padding:4px 8px;border-bottom:1px solid var(--line)">Density</th><th style="text-align:left;padding:4px 8px;border-bottom:1px solid var(--line)">Karat</th></tr></thead><tbody>'+rowsHtml+'</tbody></table></div>',
-  buttons:[{l:'Close'}]});
+// Two tabs: the original "Karat Chart" (unchanged) and the "New Karat Chart" (original × 0.99,
+// shown next to the original karat so the two can be compared at a glance).
+const KCHART_MODAL=(startTab)=>{
+ const TH='style="text-align:left;padding:4px 8px;border-bottom:1px solid var(--line)"';
+ const oldRows=KCHART.map((k,i)=>{const d=r2(KCHART_MIN+i*0.01);return '<tr><td>'+d.toFixed(2)+'</td><td>'+k.toFixed(2)+'</td></tr>';}).join('');
+ const newRows=NEW_KCHART.map((k,i)=>{const d=r2(KCHART_MIN+i*0.01);return '<tr><td>'+d.toFixed(2)+'</td><td>'+KCHART[i].toFixed(2)+'</td><td><b>'+k.toFixed(2)+'</b></td></tr>';}).join('');
+ const oldHtml='<p class="muted small" style="margin-bottom:8px">Density (from the water test) on the left, the karat it corresponds to on the right.</p>'+
+   '<div style="max-height:56vh;overflow:auto"><table style="width:100%;border-collapse:collapse"><thead style="position:sticky;top:0;background:#fff"><tr><th '+TH+'>Density</th><th '+TH+'>Karat</th></tr></thead><tbody>'+oldRows+'</tbody></table></div>';
+ const newHtml='<p class="muted small" style="margin-bottom:8px">Every karat on the original chart multiplied by 0.99 (truncated to 2 decimals). The <b>New karat</b> on the right is the value used to work out the price.</p>'+
+   '<div style="max-height:56vh;overflow:auto"><table style="width:100%;border-collapse:collapse"><thead style="position:sticky;top:0;background:#fff"><tr><th '+TH+'>Density</th><th '+TH+'>Original karat</th><th '+TH+'>New karat (× 0.99)</th></tr></thead><tbody>'+newRows+'</tbody></table></div>';
+ K.modal({title:'Gold Karat Charts — Royal Ama Yaba Ent.',wide:true,
+  body:'<div class="chips" id="kc_tabs" style="margin-bottom:12px"><button type="button" data-kc="0">Karat Chart</button><button type="button" data-kc="1">New Karat Chart</button></div><div id="kc_body"></div>',
+  buttons:[{l:'Close'}],
+  noFocus:true,
+  onOpen:w=>{
+   const show=i=>{
+    w.querySelectorAll('#kc_tabs button').forEach(b=>b.classList.toggle('on',+b.dataset.kc===i));
+    w.querySelector('#kc_body').innerHTML=i===0?oldHtml:newHtml;
+   };
+   w.querySelector('#kc_tabs').addEventListener('click',e=>{const b=e.target.closest('[data-kc]');if(b)show(+b.dataset.kc);});
+   show(startTab===1?1:0);
+  }});
 };
 
 // ---- World gold market tracker ----
@@ -765,17 +796,18 @@ const GOLD={
  views:{
   purchase(el){
    stopMarketTicker();
-   const st={kind:'refined'};
+   const st={kind:'refined',chart:'old'};
    const readGrams=()=>Number(el.querySelector('#pf_grams').value)||0;
    const readDensity=()=>Number(el.querySelector('#pf_density').value)||0;
-   const calcNow=()=>st.kind==='refined'?refinedCalc(readGrams(),readDensity(),rates()):boxCalc(readGrams(),rates());
+   const calcNow=()=>st.kind==='refined'?refinedCalc(readGrams(),readDensity(),rates(),st.chart):boxCalc(readGrams(),rates());
    const paintPreview=()=>{
     const c=calcNow();const box=el.querySelector('#pf_preview');
     if(!c){box.innerHTML=K.empty('Enter a weight above zero to see the price');return;}
     if(c.kind==='refined'){
      box.innerHTML=row2('Weight in pounds','<b>'+c.pounds.toFixed(2)+' lb</b>')+
       row2('Karat index (grams ÷ density)',c.karatIndex.toFixed(2))+
-      row2('Karat (from chart)','<b>'+c.karat.toFixed(2)+'</b>'+(c.flag?' <span style="color:var(--bad)">— '+esc(c.flag)+'</span>':''))+
+      (c.chart==='new'?row2('Karat (from original chart)',c.oldKarat.toFixed(2))+row2('× 0.99 → New karat (used for price)','<b>'+c.karat.toFixed(2)+'</b>'+(c.flag?' <span style="color:var(--bad)">— '+esc(c.flag)+'</span>':'')):
+       row2('Karat (from chart)','<b>'+c.karat.toFixed(2)+'</b>'+(c.flag?' <span style="color:var(--bad)">— '+esc(c.flag)+'</span>':'')))+
       (c.factor<1?row2('Below 23k — rate factor',c.factor.toFixed(2)+' ('+c.karat.toFixed(2)+' ÷ 23)'):row2('23k or above','full market rate applies'))+
       row2('Adjusted pound rate',money(c.adjRate))+
       '<hr style="border:0;border-top:1px dashed var(--line);margin:8px 0">'+
@@ -790,7 +822,7 @@ const GOLD={
    const paintLists=()=>{
     const rows=T('purchases').slice().sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time));
     const todayRows=rows.filter(x=>x.date===today());
-    el.querySelector('#plist').innerHTML=K.list(todayRows.slice(0,8).map(x=>({t:sellerOf(x.sellerId).name+' — '+(x.kind==='refined'?'Refined':'Box'),s:(x.kind==='refined'?x.grams+'g @ '+x.karat.toFixed(2)+'k':x.grams+'g box')+' · '+x.time,r:money(x.amount)})),'No purchases recorded yet today.');
+    el.querySelector('#plist').innerHTML=K.list(todayRows.slice(0,8).map(x=>({t:sellerOf(x.sellerId).name+' — '+(x.kind==='refined'?(x.chart==='new'?'Refined (new chart)':'Refined'):'Box'),s:(x.kind==='refined'?x.grams+'g @ '+x.karat.toFixed(2)+'k':x.grams+'g box')+' · '+x.time,r:money(x.amount)})),'No purchases recorded yet today.');
     el.querySelector('#pstocksum').innerHTML=row2('Total gold held','<b>'+fmtLb(stockPoundEq())+'</b>',1)+row2('Cash float remaining today',money(floatBalance()));
     el.querySelector('#ptab').innerHTML=K.table([
      {l:'Ref',k:'ref'},{l:'Seller',f:x=>sellerOf(x.sellerId).name},{l:'Type',f:x=>badge(x.kind==='refined'?'Refined':'Box',x.kind==='refined'?'info':'mute')},
@@ -801,7 +833,7 @@ const GOLD={
    const draw=()=>{
     el.innerHTML='<div class="grid2"><div class="stack">'+
      '<div class="card"><div class="bar" style="margin-bottom:4px"><h3 style="margin:0">Weigh in gold from a seller</h3><span class="sp"></span><button type="button" class="btn sm" data-act="chart">View karat chart</button></div>'+
-      K.chips(['Refined','Box (raw/crude)'],st.kind==='refined'?0:1,'kind')+
+      K.chips(['Refined','Box (raw/crude)','Refined — New Karat Chart'],st.kind==='box'?1:(st.chart==='new'?2:0),'kind')+
       '<label class="fld full" style="margin:10px 0"><span>Seller</span><select id="pf_seller"><option value="">Walk-in seller</option>'+
        sellerOpts().map(o=>'<option value="'+esc(o.v)+'">'+esc(o.l)+'</option>').join('')+'</select></label>'+
       '<div style="display:grid;grid-template-columns:repeat('+(st.kind==='refined'?2:1)+',1fr);gap:12px">'+
@@ -830,8 +862,8 @@ const GOLD={
     K.showReceipt(purchaseReceipt(rowRec));
    }
    K.bind(el,{wg:paintPreview,wd:paintPreview,
-    kind:i=>{st.kind=+i===0?'refined':'box';draw();},
-    record:()=>record(),chart:()=>KCHART_MODAL(),
+    kind:i=>{i=+i;st.kind=i===1?'box':'refined';st.chart=i===2?'new':'old';draw();},
+    record:()=>record(),chart:()=>KCHART_MODAL(st.kind==='refined'&&st.chart==='new'?1:0),
     reprint:id=>{const rowRec=get('purchases',id);if(rowRec)K.printReceipt(purchaseReceipt(rowRec));}});
    draw();
   },
@@ -1001,7 +1033,7 @@ const GOLD={
        {l:'Seller',f:x=>sellerOf(x.sellerId).name},
        {l:'Type',f:x=>badge(x.kind==='refined'?'Refined':'Box',x.kind==='refined'?'info':'mute')},
        {l:'Weight',f:x=>x.grams+' g'},
-       {l:'Karat / Blade-eq',f:x=>x.kind==='refined'?x.karat.toFixed(2)+'k':x.bladeEq.toFixed(1)},
+       {l:'Karat / Blade-eq',f:x=>x.kind==='refined'?x.karat.toFixed(2)+'k'+(x.chart==='new'?'<span class="sub2">new chart</span>':''):x.bladeEq.toFixed(1)},
        {l:'Pound-equivalent',cls:'num',f:x=>x.poundEq.toFixed(2)},
        {l:'Weigher',k:'weigher'},
        {l:'Amount paid',cls:'num',f:x=>money(x.amount)}
