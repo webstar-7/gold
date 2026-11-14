@@ -28,7 +28,7 @@ const C={name:'NYANSATEK Gold',product:'Gold Dealership Manager',vendorName:'NYA
  tagline:'Weigh in Refined or Box gold, price it exactly the way the Gold App does — karat chart and all — pay the seller on the spot, and track the day’s cash float.'};
 // The NYANSATEK brand mark (same artwork as favicon.svg), inlined so it can be
 // dropped into any .mono tile at any size without an extra request.
-const LOGO_SVG='<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><rect width="64" height="64" rx="14" fill="#152238"/><g fill="none" stroke="#D9A833" stroke-width="6.2" stroke-linecap="round" stroke-linejoin="round"><path d="M 32 32 C 32 21, 24 15, 18 20 C 12 25, 15 34, 24 34 C 29 34, 32 31, 32 32 C 32 40, 40 47, 46 43"/><path d="M 32 32 C 32 21, 40 15, 46 20 C 52 25, 49 34, 40 34 C 36.4 34, 33.6 32.6, 32.4 30.8 M 30.2 33.6 C 27 39, 20 45, 18 43"/></g></svg>';
+const LOGO_SVG='<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><rect width="64" height="64" rx="14" fill="#1a1307"/><g fill="none" stroke="#D9A833" stroke-width="6.2" stroke-linecap="round" stroke-linejoin="round"><path d="M 32 32 C 32 21, 24 15, 18 20 C 12 25, 15 34, 24 34 C 29 34, 32 31, 32 32 C 32 40, 40 47, 46 43"/><path d="M 32 32 C 32 21, 40 15, 46 20 C 52 25, 49 34, 40 34 C 36.4 34, 33.6 32.6, 32.4 30.8 M 30.2 33.6 C 27 39, 20 45, 18 43"/></g></svg>';
 let S=null,user=null,org=null,cur='dashboard';
 
 /* ================= generic helpers (unchanged from the demo engine) ================= */
@@ -60,7 +60,8 @@ cart:'M3 4h2l2.4 11h11l2-8H6.2M9.5 20h.01M17 20h.01',
 box:'M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10',
 gear:'M4 7h10M18 7h2M4 17h2M10 17h10M14 5v4M6 15v4',
 chart:'M4 20V10M10 20V4M16 20v-7M22 20H2',
-list:'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01'
+list:'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
+help:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.3 9.2a2.8 2.8 0 1 1 4.3 2.4c-.9.6-1.6 1.2-1.6 2.4M12 17.2h.01'
 };
 K.icon=n=>'<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="'+(ICONS[n]||ICONS.list)+'"/></svg>';
 
@@ -460,10 +461,97 @@ const NAV_BASE=[{id:'dashboard',label:'Overview',icon:'home'},
  {id:'sellers',label:'Sellers',icon:'users',roles:['owner']},
  {id:'staff',label:'Staff',icon:'list',roles:['owner']},
  {id:'ledger',label:'Ledger',icon:'chart',roles:['owner']},
- {id:'settings',label:'Settings',icon:'gear',roles:['owner']}];
+ {id:'settings',label:'Settings',icon:'gear',roles:['owner']},
+ {id:'guide',label:'How to use',icon:'help'}];
 function navItems(){return NAV_BASE.filter(allowed);}
 function homeFor(){return user&&user.role==='staff'?'purchase':'dashboard';}
 function titleOf(id){const n=NAV_BASE.find(x=>x.id===id);return n?n.label:'';}
+/* ================= how to use ================= */
+// A plain-language guide, the same shape as the one in NYANSATEK POS and School:
+// a short tour, then sections that open on tap, with buttons that jump to the right screen.
+function renderGuide(el){
+ const owner=user&&user.role==='owner';
+ const btn=(id,label)=>'<button type="button" class="btn sm" data-go="'+id+'">'+(label||'Open')+'</button>';
+ const ol=items=>'<ol class="gd-steps">'+items.map(i=>'<li>'+i+'</li>').join('')+'</ol>';
+ const sec=(id,title,body,open)=>'<details class="gd" id="gd-'+id+'"'+(open?' open':'')+'><summary>'+title+'</summary><div class="gd-b">'+body+'</div></details>';
+ const reel='<div class="card gd-reel"><video muted loop playsinline autoplay preload="metadata" poster="assets/gold-reel.jpg" aria-label="A short tour of the app"><source src="assets/gold-reel.mp4" type="video/mp4"></video>'+
+  '<div><h3>A short tour</h3><p class="muted" style="margin:0">Weighing in and paying a seller, the day’s cash float, gold bought through the week, and a login for every member of staff.</p></div></div>';
+ const buy=open=>sec('buy','Buying gold from a seller',ol([
+   'Open <b>Buy Gold</b>. '+btn('purchase'),
+   'Choose the kind of gold at the top: <b>Refined</b>, <b>Box (raw/crude)</b>, or <b>Refined — New Karat Chart</b>.',
+   'Pick the <b>Seller</b>, or leave it on <b>Walk-in seller</b>.',
+   'Type the <b>Weight (grams)</b>. For refined gold also type the <b>Density (water test)</b>.',
+   'Check the working shown underneath: pounds, karat from the chart, the rate used, and the <b>Amount to pay seller</b>. Tap <b>View karat chart</b> if you want to see the chart itself.',
+   'Tap <b>Record purchase &amp; pay seller</b>. The receipt opens, ready to print.',
+   'Need a receipt again? Find the purchase under <b>Recent purchases</b> and tap <b>Reprint</b>.']),open);
+ const help='<div class="card gd-help"><b>Something not working?</b> '+(owner?'Call':'Ask the owner, or call')+' NYANSATEK support on <a href="tel:'+esc(C.vendorPhone)+'">0536 340 578</a>.</div>';
+ if(!owner){
+  el.innerHTML='<div class="card gd-intro"><h2>How to use</h2><p class="muted">Everything you need to weigh in gold and pay a seller. Tap a heading to open it.</p></div>'+reel+
+   sec('signin','Signing in','<p>Sign in with the <b>username</b> and password the owner created for you, not the business name.</p>')+
+   buy(true)+help;
+ }else{
+  const screens=[
+   ['Overview','dashboard','Today at a glance: gold bought, money paid to sellers, cash float remaining and the last 7 days.'],
+   ['Buy Gold','purchase','Weigh in Refined or Box gold, see the price worked out, pay the seller and print the receipt.'],
+   ['Cash & Balances','cash','Record cash received to buy with, and see each day’s opening and closing balance.'],
+   ['Gold Stock','stock','Gold in stock, dispatching gold onward, the world gold market, and your buying and resale rates.'],
+   ['Sellers','sellers','Your regular sellers, how often they sell to you and what you have paid them.'],
+   ['Staff','staff','Create staff logins and switch them off when someone leaves.'],
+   ['Ledger','ledger','The full record of purchases and dispatches, the profit report and your expenses.'],
+   ['Settings','settings','Dealership name, phone and location for receipts, a backup of your data, and installing the app.']];
+  const jump=[['setup','Setting up'],['screens','What each screen does'],['rates','Rates'],['buy','Buying gold'],['cash','Cash float'],['stock','Stock & dispatch'],['sellers','Sellers'],['staff','Staff'],['ledger','Ledger & profit'],['daily','Daily routine']];
+  el.innerHTML='<div class="card gd-intro"><h2>How to use '+esc(C.name)+'</h2><p class="muted">Everything you need to set up your dealership and run it day to day. Tap a heading to open it; the buttons take you straight to the right screen.</p>'+
+   '<div class="gd-jump">'+jump.map(j=>'<a href="#gd-'+j[0]+'" data-open="gd-'+j[0]+'">'+j[1]+'</a>').join('')+'</div></div>'+reel+
+   sec('setup','Setting up your dealership (do these in order)',ol([
+    'Enter your dealership name, phone and location so they print on every receipt. '+btn('settings'),
+    'Set today’s buying rates: <b>Rate per Pound</b> and <b>Rate per Blade</b>, and your resale rate. '+btn('stock'),
+    'Record the cash you have been given to buy with. '+btn('cash'),
+    'Add your regular sellers. Anyone else can be bought from as a walk-in seller. '+btn('sellers'),
+    'Create a login for each member of staff who weighs in gold. '+btn('staff'),
+    'Buy your first gold and print the receipt. '+btn('purchase')]),true)+
+   sec('screens','What each screen does','<div class="gd-tabs">'+screens.map(x=>'<div><b>'+x[0]+'</b><span>'+x[2]+'</span>'+btn(x[1])+'</div>').join('')+'</div>')+
+   sec('rates','Setting your buying and resale rates',ol([
+    'Open <b>Gold Stock</b> and find <b>Buying &amp; resale rates</b>. '+btn('stock'),
+    'Type the <b>Rate per Pound (GH₵)</b> used for refined gold and the <b>Rate per Blade (GH₵)</b> used for box gold.',
+    'Type the <b>Resale rate per pound-equivalent (GH₵)</b>, which is what you expect to sell at.',
+    'Tap <b>Save rates</b>. Every new purchase uses these rates until you change them; <b>Your rate history</b> keeps the old ones.'])+
+    '<p class="muted">The <b>World Gold Market</b> card on the same screen shows the world price and the dollar rate as a guide. It does not change your rates for you.</p>')+
+   buy(false)+
+   sec('cash','Tracking the cash float',ol([
+    'Open <b>Cash &amp; Balances</b>. '+btn('cash'),
+    'Whenever cash is sent to you to buy with, tap <b>Record cash received</b> and enter the amount, who it came from and a note.',
+    'Money paid to sellers is taken off the float automatically each time you record a purchase.',
+    '<b>Daily opening &amp; closing balance</b> shows each day’s opening balance, cash received, cash paid out and closing balance.']))+
+   sec('stock','Gold in stock and sending gold onward',ol([
+    'Open <b>Gold Stock</b> to see what you hold, split into Refined and Box. '+btn('stock'),
+    'When you sell or send gold onward, fill in <b>Dispatch / sell gold onward</b>: which stock it comes from, the weight and who it was sold to.',
+    'Tap <b>Record dispatch</b>. The gold leaves your stock and the sale appears in the ledger.']))+
+   sec('sellers','Keeping your sellers',ol([
+    'Open <b>Sellers</b> and tap <b>Add seller</b>. Enter the name and, if you have it, a phone number. '+btn('sellers'),
+    'Choose the seller on the Buy Gold screen each time they sell to you.',
+    'The Sellers list then shows how many times each one has sold to you, how much gold they supplied and what you paid them.']))+
+   sec('staff','Giving staff their own logins',ol([
+    'Open <b>Staff</b> and tap <b>+ Add staff</b>. '+btn('staff'),
+    'Enter their full name, a username with no spaces, and a temporary password of at least 8 characters.',
+    'Give them the username and password yourself. Staff sign in with the username and only see <b>Buy Gold</b> and this guide.',
+    'When someone leaves, tap <b>Deactivate</b> beside their name. Their past purchases stay in your records.']))+
+   sec('ledger','The ledger, profit and expenses',ol([
+    'Open <b>Ledger</b>. '+btn('ledger'),
+    '<b>Purchases (full record)</b> lists every purchase with its weight, karat or blade-equivalent, weigher and amount paid.',
+    '<b>Dispatches / Resale</b> lists the gold you have sent onward and what it brought in.',
+    '<b>Profit report</b> sets what you sold against what it cost you. Tap <b>Add expense</b> there to record costs such as security, assay fees, rent or transport.']))+
+   sec('daily','A simple daily routine',ol([
+    'Morning: check the rates and update them if the market has moved. '+btn('stock'),
+    'Record any cash received before you start buying. '+btn('cash'),
+    'Through the day: record every purchase as it happens and hand over the receipt. '+btn('purchase'),
+    'Evening: compare the closing balance with the cash in hand, and look over the Overview. '+btn('dashboard')]))+
+   help;
+ }
+ el.onclick=e=>{
+  const g=e.target.closest('[data-go]');if(g){go(g.dataset.go);return;}
+  const o=e.target.closest('[data-open]');if(o){const d=document.getElementById(o.dataset.open);if(d)d.open=true;}
+ };
+}
 function chromeSide(){
  const s=document.getElementById('side');
  s.innerHTML='<div class="brand"><div class="mono">'+LOGO_SVG+'</div><div><b>'+esc(S.settings.org)+'</b><small>'+esc(C.product)+'</small><span class="nt-by"><svg class="nt-logo" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><g fill="none" stroke="#D9A833" stroke-width="6.2" stroke-linecap="round" stroke-linejoin="round"><path d="M32 32C32 21 24 15 18 20C12 25 15 34 24 34C29 34 32 31 32 32C32 40 40 47 46 43"/><path d="M32 32C32 21 40 15 46 20C52 25 49 34 40 34C36.4 34 33.6 32.6 32.4 30.8M30.2 33.6C27 39 20 45 18 43"/></g></svg><span>by <b>NYANSATEK</b></span></span></div></div><nav class="nav" aria-label="Main">'+
@@ -483,7 +571,7 @@ function go(id){
  const el=document.getElementById('view');
  el.onclick=el.onchange=el.oninput=null;
  try{
-  if(id==='dashboard')renderDashboard(el);else if(id==='settings')renderSettings(el);else if(id==='staff')renderStaff(el);
+  if(id==='dashboard')renderDashboard(el);else if(id==='settings')renderSettings(el);else if(id==='staff')renderStaff(el);else if(id==='guide')renderGuide(el);
   else GOLD.views[id](el,K);
  }catch(e){console.error(e);el.innerHTML='<div class="card"><h3>Something went wrong</h3><p class="muted">'+esc(e&&e.message)+'</p></div>';}
  window.scrollTo(0,0);
