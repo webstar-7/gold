@@ -422,5 +422,9 @@ img,svg,canvas,video{max-width:100%}
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();
 </script>
+<script>
+// Lets Gold open as an installed app when the connection is poor or down.
+if ('serviceWorker' in navigator) window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+</script>
 </body>
 </html>
